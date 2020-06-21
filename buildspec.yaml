@@ -1,0 +1,30 @@
+# Buildspec for deploying changes
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: latest
+      python: latest
+    commands:
+      # Need cfn-lint for template lint check
+      - pip install cfn-lint
+      # Install yarn for linking dependencies
+      - npm i -g yarn
+      # Install dependencies for github-status-update
+      - cd src/github-status-update
+      - yarn install
+      - cd ../..
+  build:
+    commands:
+      - ls
+      # Template lint check
+      - cfn-lint -t src/template.yaml
+      # Package sam create template
+      - >
+        sam package \
+          --template-file src/template.yaml \
+          --output-template-file packaged-template.yaml \
+          --s3-bucket $PIPELINE_BUCKET
+      # Upload Template
+      - aws s3 cp packaged-template.yaml "s3://$PIPELINE_BUCKET/template.yaml" 

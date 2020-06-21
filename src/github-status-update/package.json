@@ -1,0 +1,8 @@
+{
+  "name": "github-status-update",
+  "version": "0.0.1",
+  "description": "Process events related to execution state changes of CodePipeline pipelines",
+  "dependencies": {
+    "axios": "^0.18.1"
+  }
+}

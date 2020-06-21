@@ -1,0 +1,666 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  The AWS Transmutation Pipeline Template
+
+Metadata:
+  #AWS::ServerlessRepo::Application:
+  #  Name: aws-transmutation-pipeline
+  #  Description: >
+  #    The AWS Transmutation Pipeline Template
+  #  Author: Marc Guiselin
+  #  SpdxLicenseId: MIT-0
+  #  Labels: [github, cd, ci, codepipeline, continuous-deploy]
+  #  HomePageUrl: https://github.com/MarcGuiselin/aws-transmutation
+  #  SemanticVersion: 0.1.0
+  #  SourceCodeUrl: https://github.com/MarcGuiselin/aws-transmutation
+  #  LicenseUrl: LICENSE
+  #  ReadmeUrl: README.md
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Pipeline Configuration
+        Parameters: 
+          - PipelineName
+          - DeployStackName
+          - PipelineStage
+          - PipelineFeatures
+          - EnvironmentType
+          - EnvironmentComputeType
+      - Label:
+          default: Source (GitHub)
+        Parameters:
+          - GitHubOAuthToken
+          - GitHubOwner
+          - GitHubRepo
+          - GitHubBranch
+      - Label: 
+          default: Files
+        Parameters:
+          - PackagedTemplatePath
+          - CloudFormationTemplateConfigurationPath
+          - BuildSpecPath
+          - DeploySpecPath
+          - IntegSpecPath
+          - CleanupSpecPath
+    ParameterLabels:
+      # Pipeline Configuration
+      PipelineName:
+        default: Name
+      DeployStackName:
+        default: Deploy Stack Name
+      PipelineStage:
+        default: Stage
+      PipelineFeatures:
+        default: Features
+      EnvironmentType:
+        default: Compute Environment
+      EnvironmentComputeType:
+        default: Compute Type
+      # Source (GitHub)
+      GitHubOAuthToken:
+        default: OAuth Token
+      GitHubOwner:
+        default: Owner
+      GitHubRepo:
+        default: Name
+      GitHubBranch:
+        default: Branch
+      # Files
+      PackagedTemplatePath:
+        default: Packaged Template
+      CloudFormationTemplateConfigurationPath:
+        default: CloudFormation Template Configuration
+      BuildSpecPath:
+        default: Build Spec
+      DeploySpecPath:
+        default: Deploy Spec (Optional depending on Features)
+      IntegSpecPath:
+        default: Integ Spec (Optional depending on Features)
+      CleanupSpecPath:
+        default: Cleanup Spec (Optional depending on Features)
+
+Parameters:
+  # Pipeline Configuration
+  PipelineName:
+    Type: String
+    Default: my-transmutation-demo
+    AllowedPattern: '^[A-Za-z0-9\-]+$'
+    Description: >
+      The name for the entire pipeline. Alphanumeric separated by hyphens.
+      
+      All resources belonging to the pipeline will follow similar naming conventions including
+      "my-transmutation-demo-codebuild", "my-transmutation-demo-master-pipeline",
+      "my-transmutation-demo-pipeline-artifact-bucket", etc
+  DeployStackName:
+    Type: String
+    Default: my-transmutation-demo-test-stack
+    AllowedPattern: '^[A-Za-z0-9\-]+$'
+    Description: >
+      The name of the stack this pipeline will deploy to.
+  PipelineStage:
+    Type: String
+    Default: test
+    AllowedValues:
+      - test
+      - prod
+    Description: >
+      Does this pipeline create staging/trying test builds or final production build?
+      
+      This value manifests itself as the PIPELINE_STAGE environment variable for all 
+      pipeline scripts and can be used to load more environment variables from test.env and
+      prod.env files.
+  PipelineFeatures:
+    Type: String
+    Default: Build > Deploy > Integration > Cleanup
+    AllowedValues:
+      - Build > Deploy
+      #- Build > Deploy > Manual Review
+      #- Build > Deploy > Manual Review > Cleanup
+      - Build > Deploy > Integration
+      - Build > Deploy > Integration > Cleanup
+      #- Build > Deploy > Integration > Manual Review > Cleanup
+    Description: >
+      Select the features you'd like your pipeline to have
+  EnvironmentType:
+    Type: String
+    Default: LINUX_CONTAINER
+    AllowedValues:
+      - LINUX_CONTAINER
+      - WINDOWS_CONTAINER
+    Description: >
+      AWS CodeBuild (build/deploy stage) compute environment.
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
+  EnvironmentComputeType:
+    AllowedValues:
+      - BUILD_GENERAL1_SMALL
+      - BUILD_GENERAL1_MEDIUM
+      - BUILD_GENERAL1_LARGE
+    Default: BUILD_GENERAL1_SMALL
+    Description: >
+      AWS CodeBuild (build/deploy stage) compute instance type. BUILD_GENERAL1_SMALL is linux only!
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
+    Type: String
+  # Source (GitHub)
+  GitHubOAuthToken:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[A-Za-z0-9]*$'
+    Description: >
+      OAuth token used by AWS CodePipeline to connect to GitHub.
+      General instructions for creating a GitHub OAuth token can be found at:
+      https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
+      When you get to the scopes/permissions page, you should select the "repo"
+      and "admin:repo_hook" scopes, which will automatically select all
+      permissions under those two scopes.
+    NoEcho: true
+  GitHubOwner:
+    Type: String
+    Default: ''
+    AllowedPattern: '^\S*$'
+    Description: >
+      GitHub username owning the repo
+  GitHubRepo:
+    Type: String
+    Default: ''
+    AllowedPattern: '^\S*$'
+    Description: >
+      GitHub repo name
+  GitHubBranch:
+    Type: String
+    Default: ''
+    AllowedPattern: '^\S*$'
+    Description: >
+      GitHub repo branch name. Recommended values are: master, staging and trying
+  # Files
+  PackagedTemplatePath:
+    Type: String
+    Default: packaged-template.yaml
+    Description: >
+      Make sure your build script packages your template as this file. 
+  CloudFormationTemplateConfigurationPath:
+    Type: String
+    Default: test-configuration.json
+    AllowedPattern: '^.*\.json$'
+    Description: >
+      Relative CloudFormation json template configuration file. Use this for parameter overrides
+      For more information, see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab1c13c17c15
+  BuildSpecPath:
+    Type: String
+    Default: build.yaml
+    Description: >
+      Relative BuildSpec file path for build stage.
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+  DeploySpecPath:
+    Type: String
+    Default: deploy.yaml
+    Description: >
+      Relative BuildSpec file path for deployment stage.
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+  IntegSpecPath:
+    Type: String
+    Default: integ.yaml
+    Description: >
+      Relative BuildSpec file path for deployment stage.
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+  CleanupSpecPath:
+    Type: String
+    Default: cleanup.yaml
+    Description: >
+      Relative BuildSpec file path for deployment stage.
+      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+
+Rules:
+  ValidateGitHub:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref GitHubOAuthToken, '']]
+        AssertDescription: GitHubOAuthToken must be specified
+      - Assert: !Not [!Equals [!Ref GitHubOwner, '']]
+        AssertDescription: GitHubOwner must be specified
+      - Assert: !Not [!Equals [!Ref GitHubRepo, '']]
+        AssertDescription: GitHubRepo must be specified
+      - Assert: !Not [!Equals [!Ref GitHubBranch, '']]
+        AssertDescription: GitHubBranch must be specified
+
+Conditions:
+  HasFeatureIntegration: !Or
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration']
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
+  #HasFeatureManualReview: !Or
+  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review']
+  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review > Cleanup']
+  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
+  HasFeatureCleanup: !Or
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review > Cleanup']
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
+
+# TODO: most tags and descriptions are bad
+# TODO: make sure every resource is tagged
+
+Resources:
+  # Hook to github repository
+  GitHubWebhook:
+    Type: AWS::CodePipeline::Webhook
+    Properties:
+      Name: !Sub ${PipelineName}-github-hook
+      AuthenticationConfiguration:
+        SecretToken: !Ref GitHubOAuthToken
+      Filters:
+        - JsonPath: "$.ref"
+          MatchEquals: refs/heads/{Branch}
+      Authentication: GITHUB_HMAC
+      TargetPipeline: !Ref Pipeline
+      TargetAction: GitHubSource
+      TargetPipelineVersion: !GetAtt Pipeline.Version
+      RegisterWithThirdParty: true
+  # Lambda function that updates GitHub Status
+  GitHubStatusUpdate:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${PipelineName}-github-status-update
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      CodeUri: github-status-update/ # TODO s3://aws-transmutation-pipeline/code.zip
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 10
+      Role: !GetAtt GitHubStatusUpdateRole.Arn
+      Environment:
+        Variables:
+          GITHUB_OWNER: !Ref GitHubOwner
+          GITHUB_REPO: !Ref GitHubRepo
+          GITHUB_OAUTH_TOKEN: !Ref GitHubOAuthToken
+      Events:
+        Event:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              source:
+                - aws.codepipeline
+              detail-type:
+                - "CodePipeline Pipeline Execution State Change"
+              detail:
+                state:
+                  - "STARTED"
+                  - "SUCCEEDED"
+                  - "FAILED"
+  GitHubStatusUpdateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${PipelineName}-github-status-update-role
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaBasicExecutionRole # TODO
+      Policies:
+        # - AWSCodePipelineReadOnlyAccess
+        # TODO: Try out
+        - PolicyName: pipeline-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:GetPipeline
+                  - codepipeline:GetPipelineState
+                  - codepipeline:GetPipelineExecution
+                Resource:
+                  - !Sub arn:aws:codepipeline:::${Pipeline}
+  # S3 bucket containing build artifacts
+  PipelineArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${PipelineName}-pipeline-artifacts
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      # Don't keep outdated builds
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 1 # TODO: could parameterize
+            Status: Enabled
+  # Pipeline that builds and deploys branch
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${PipelineName}-master-pipeline
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      ArtifactStore:
+        Location: !Ref PipelineArtifactsBucket
+        Type: S3
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: "1"
+              Configuration:
+                Owner: !Ref GitHubOwner
+                OAuthToken: !Ref GitHubOAuthToken
+                Repo: !Ref GitHubRepo
+                Branch: master
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceArtifact
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref Build
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+        - Name: Deploy
+          Actions:
+            - Name: Create Change Set
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              InputArtifacts:
+                - Name: BuildArtifact
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                RoleArn: !GetAtt PipelineRole.Arn
+                StackName: !Ref DeployStackName
+                TemplateConfiguration: !Sub BuildArtifact::${CloudFormationTemplateConfigurationPath}
+                TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
+                ChangeSetName: !Sub a-${DeployStackName}-Deploy
+              RunOrder: 1
+            - Name: Execute Change Set
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: !Ref DeployStackName
+                ChangeSetName: !Sub a-${DeployStackName}-Deploy
+              RunOrder: 2
+            - Name: Deploy
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref Deploy
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 3
+        - !If
+          - HasFeatureIntegration
+          - Name: Integration
+            Actions:
+              - Name: Integration
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref Integration
+                InputArtifacts:
+                  - Name: BuildArtifact
+          - !Ref AWS::NoValue
+        - !If
+          - HasFeatureIntegration
+          - Name: Cleanup
+            Actions:
+              - Name: Cleanup
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref Integration
+                InputArtifacts:
+                  - Name: BuildArtifact
+                RunOrder: 1
+              - Name: Delete Stack
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Provider: CloudFormation
+                  Version: '1'
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: !Ref DeployStackName
+                RunOrder: 2
+          - !Ref AWS::NoValue
+  # Build Pipeline Step
+  Build:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${PipelineName}-pipeline-build
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref BuildSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:latest'
+        Type: !Ref EnvironmentType
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref PipelineArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+  # Deploy Pipeline Step
+  Deploy:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${PipelineName}-pipeline-build
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref DeploySpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:latest'
+        Type: !Ref EnvironmentType
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref PipelineArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+  # Integration Tests Pipeline Step
+  Integration:
+    Type: AWS::CodeBuild::Project
+    Condition: HasFeatureIntegration
+    Properties:
+      Name: !Sub ${PipelineName}-pipeline-build
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref IntegSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:latest'
+        Type: !Ref EnvironmentType
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref PipelineArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName 
+  # Cleanup Pipeline Step
+  Cleanup:
+    Type: AWS::CodeBuild::Project
+    Condition: HasFeatureCleanup
+    Properties:
+      Name: !Sub ${PipelineName}-pipeline-build
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref CleanupSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:latest'
+        Type: !Ref EnvironmentType
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref PipelineArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+  # Roles and Policies
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${PipelineName}-master-pipeline-role
+      #Tags:
+      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
+      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
+      #  Project: !Ref PipelineName
+      Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "codepipeline.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess # TODO
+      Policies:
+        # Access to build artifact bucket
+        - PolicyName: s3-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:DeleteObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:PutObject"
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
+        # Access to code build/deployment
+        - PolicyName: codebuild-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codebuild:StartBuild"
+                  - "codebuild:BatchGetBuilds"
+                Resource:
+                  - !GetAtt Build.Arn
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${PipelineName}-master-pipeline-build-role
+      Description: !Sub "Used in CodeBuild project. Created by CloudFormation ${AWS::StackId}"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+        Version: '2012-10-17'
+      Path: /service-role/
+  CodeBuildPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub codebuild-access-${AWS::StackName}
+      Roles:
+        - !Ref CodeBuildRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
+          - Action:
+              - s3:ListBucket
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
