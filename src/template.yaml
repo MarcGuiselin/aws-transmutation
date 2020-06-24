@@ -594,7 +594,8 @@ Resources:
             Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess # TODO
+        # TODO: tighten down on permissions
+        - arn:aws:iam::aws:policy/AdministratorAccess
       Policies:
         # Access to build artifact bucket
         - PolicyName: s3-access
