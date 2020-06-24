@@ -181,9 +181,10 @@ Parameters:
   CloudFormationTemplateConfigurationPath:
     Type: String
     Default: test-configuration.json
-    AllowedPattern: '^.*\.json$'
+    AllowedPattern: '^(.*\.json)?$'
     Description: >
-      Relative CloudFormation json template configuration file. Use this for parameter overrides
+      Relative CloudFormation json template configuration file. Keep this value empty to not load a file. 
+      Use this for CloudFormation Parameter overrides.
       For more information, see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab1c13c17c15
   BuildSpecPath:
     Type: String
@@ -235,6 +236,7 @@ Conditions:
     - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review > Cleanup']
     - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
     - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
+  HasCloudFormationTemplateConfigurationPath: !Not [ !Equals [!Ref CloudFormationTemplateConfigurationPath, ''] ]
 
 # TODO: most tags and descriptions are bad
 # TODO: make sure every resource is tagged
@@ -265,7 +267,7 @@ Resources:
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
       #  Project: !Ref PipelineName
       Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
-      CodeUri: github-status-update/ # TODO s3://aws-transmutation-pipeline/code.zip
+      CodeUri: github-status-update/
       Handler: index.handler
       Runtime: nodejs12.x
       Timeout: 10
@@ -396,7 +398,10 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 RoleArn: !GetAtt PipelineRole.Arn
                 StackName: !Ref DeployStackName
-                TemplateConfiguration: !Sub BuildArtifact::${CloudFormationTemplateConfigurationPath}
+                TemplateConfiguration: !If
+                  - HasCloudFormationTemplateConfigurationPath
+                  - !Sub BuildArtifact::${CloudFormationTemplateConfigurationPath}
+                  - !Ref AWS::NoValue
                 TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
                 ChangeSetName: !Sub a-${DeployStackName}-Deploy
               RunOrder: 1
