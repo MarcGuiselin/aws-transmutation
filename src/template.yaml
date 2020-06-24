@@ -261,7 +261,7 @@ Resources:
   GitHubStatusUpdate:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ${PipelineName}-github-status-update
+      FunctionName: !Sub ${PipelineName}-status-update
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -294,7 +294,7 @@ Resources:
   GitHubStatusUpdateRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-github-status-update-role
+      RoleName: !Sub ${PipelineName}-status-update-role
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -343,7 +343,7 @@ Resources:
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub ${PipelineName}-master-pipeline
+      Name: !Sub ${PipelineName}
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -385,7 +385,7 @@ Resources:
                 - Name: BuildArtifact
         - Name: Deploy
           Actions:
-            - Name: Create Change Set
+            - Name: Create-Changeset
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -405,7 +405,7 @@ Resources:
                 TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
                 ChangeSetName: !Sub a-${DeployStackName}-Deploy
               RunOrder: 1
-            - Name: Execute Change Set
+            - Name: Execute-Changeset
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -472,7 +472,7 @@ Resources:
   Build:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub ${PipelineName}-pipeline-build
+      Name: !Sub ${PipelineName}-build
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -500,7 +500,7 @@ Resources:
   Deploy:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub ${PipelineName}-pipeline-build
+      Name: !Sub ${PipelineName}-deploy
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -529,7 +529,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Condition: HasFeatureIntegration
     Properties:
-      Name: !Sub ${PipelineName}-pipeline-build
+      Name: !Sub ${PipelineName}-integration
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -558,7 +558,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Condition: HasFeatureCleanup
     Properties:
-      Name: !Sub ${PipelineName}-pipeline-build
+      Name: !Sub ${PipelineName}-cleanup
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -586,7 +586,7 @@ Resources:
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-master-pipeline-role
+      RoleName: !Sub ${PipelineName}-role
       #Tags:
       #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
       #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
@@ -638,7 +638,7 @@ Resources:
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-master-pipeline-build-role
+      RoleName: !Sub ${PipelineName}-codebuild-role
       Description: !Sub "Used in CodeBuild project. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Statement:
