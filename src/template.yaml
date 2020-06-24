@@ -25,7 +25,6 @@ Metadata:
           - DeployStackName
           - PipelineStage
           - PipelineFeatures
-          - EnvironmentType
           - EnvironmentComputeType
       - Label:
           default: Source (GitHub)
@@ -53,10 +52,8 @@ Metadata:
         default: Stage
       PipelineFeatures:
         default: Features
-      EnvironmentType:
-        default: Compute Environment
       EnvironmentComputeType:
-        default: Compute Type
+        default: Compute
       # Source (GitHub)
       GitHubOAuthToken:
         default: OAuth Token
@@ -122,15 +119,6 @@ Parameters:
       #- Build > Deploy > Integration > Manual Review > Cleanup
     Description: >
       Select the features you'd like your pipeline to have
-  EnvironmentType:
-    Type: String
-    Default: LINUX_CONTAINER
-    AllowedValues:
-      - LINUX_CONTAINER
-      - WINDOWS_CONTAINER
-    Description: >
-      AWS CodeBuild (build/deploy stage) compute environment.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
   EnvironmentComputeType:
     AllowedValues:
       - BUILD_GENERAL1_SMALL
@@ -138,7 +126,7 @@ Parameters:
       - BUILD_GENERAL1_LARGE
     Default: BUILD_GENERAL1_SMALL
     Description: >
-      AWS CodeBuild (build/deploy stage) compute instance type. BUILD_GENERAL1_SMALL is linux only!
+      AWS CodeBuild (build/deploy/integration/cleanup stage) compute instance type.
       For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
     Type: String
   # Source (GitHub)
@@ -238,9 +226,6 @@ Conditions:
     - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
   HasCloudFormationTemplateConfigurationPath: !Not [ !Equals [!Ref CloudFormationTemplateConfigurationPath, ''] ]
 
-# TODO: most tags and descriptions are bad
-# TODO: make sure every resource is tagged
-
 Resources:
   # Hook to github repository
   GitHubWebhook:
@@ -262,10 +247,6 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${PipelineName}-status-update
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
       CodeUri: github-status-update/
       Handler: index.handler
@@ -295,10 +276,6 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${PipelineName}-status-update-role
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -306,34 +283,35 @@ Resources:
           - Effect: Allow
             Principal:
               Service:
+                - lambda.amazonaws.com
                 - codepipeline.amazonaws.com
             Action:
               - sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole # TODO
-      Policies:
-        # - AWSCodePipelineReadOnlyAccess
-        # TODO: Try out
-        - PolicyName: pipeline-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - codepipeline:GetPipeline
-                  - codepipeline:GetPipelineState
-                  - codepipeline:GetPipelineExecution
-                Resource:
-                  - !Sub arn:aws:codepipeline:::${Pipeline}
+        - arn:aws:iam::aws:policy/AWSCodePipelineReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # TODO: tighten down on permissions
+        # - arn:aws:iam::aws:policy/AdministratorAccess
+        # - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole # TODO
+      #Policies:
+      #  # - AWSCodePipelineReadOnlyAccess
+      #  # TODO: Try out
+      #  - PolicyName: pipeline-access
+      #    PolicyDocument:
+      #      Version: "2012-10-17"
+      #      Statement:
+      #        - Effect: Allow
+      #          Action:
+      #            - codepipeline:GetPipeline
+      #            - codepipeline:GetPipelineState
+      #            - codepipeline:GetPipelineExecution
+      #          Resource:
+      #            - !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
   # S3 bucket containing build artifacts
   PipelineArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${PipelineName}-pipeline-artifacts
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
+      BucketName: !Sub ${PipelineName}-artifacts
       # Don't keep outdated builds
       LifecycleConfiguration:
         Rules:
@@ -344,10 +322,6 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: !Sub ${PipelineName}
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       ArtifactStore:
         Location: !Ref PipelineArtifactsBucket
         Type: S3
@@ -385,7 +359,7 @@ Resources:
                 - Name: BuildArtifact
         - Name: Deploy
           Actions:
-            - Name: Create-Changeset
+            - Name: CreateChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -396,7 +370,7 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                RoleArn: !GetAtt PipelineRole.Arn
+                RoleArn: !GetAtt DeployRole.Arn
                 StackName: !Ref DeployStackName
                 TemplateConfiguration: !If
                   - HasCloudFormationTemplateConfigurationPath
@@ -405,7 +379,7 @@ Resources:
                 TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
                 ChangeSetName: !Sub a-${DeployStackName}-Deploy
               RunOrder: 1
-            - Name: Execute-Changeset
+            - Name: ExecuteChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -425,7 +399,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref Deploy
               InputArtifacts:
-                - Name: BuildArtifact
+                - Name: SourceArtifact
               RunOrder: 3
         - !If
           - HasFeatureIntegration
@@ -440,7 +414,7 @@ Resources:
                 Configuration:
                   ProjectName: !Ref Integration
                 InputArtifacts:
-                  - Name: BuildArtifact
+                  - Name: SourceArtifact
           - !Ref AWS::NoValue
         - !If
           - HasFeatureIntegration
@@ -455,7 +429,7 @@ Resources:
                 Configuration:
                   ProjectName: !Ref Integration
                 InputArtifacts:
-                  - Name: BuildArtifact
+                  - Name: SourceArtifact
                 RunOrder: 1
               - Name: Delete Stack
                 ActionTypeId:
@@ -473,10 +447,6 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub ${PipelineName}-build
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -485,8 +455,8 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:latest'
-        Type: !Ref EnvironmentType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: PIPELINE_BUCKET
             Value: !Ref PipelineArtifactsBucket
@@ -501,10 +471,6 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub ${PipelineName}-deploy
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -513,8 +479,8 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:latest'
-        Type: !Ref EnvironmentType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: PIPELINE_BUCKET
             Value: !Ref PipelineArtifactsBucket
@@ -530,10 +496,6 @@ Resources:
     Condition: HasFeatureIntegration
     Properties:
       Name: !Sub ${PipelineName}-integration
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -542,8 +504,8 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:latest'
-        Type: !Ref EnvironmentType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: PIPELINE_BUCKET
             Value: !Ref PipelineArtifactsBucket
@@ -559,10 +521,6 @@ Resources:
     Condition: HasFeatureCleanup
     Properties:
       Name: !Sub ${PipelineName}-cleanup
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -571,8 +529,8 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:latest'
-        Type: !Ref EnvironmentType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: PIPELINE_BUCKET
             Value: !Ref PipelineArtifactsBucket
@@ -582,15 +540,11 @@ Resources:
             Value: !Ref DeployStackName
           - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
             Value: !Ref PackagedTemplatePath
-  # Roles and Policies
+  # Roles
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${PipelineName}-role
-      #Tags:
-      #  ProjectRepo: !Sub https://github.com/${GitHubOwner}/${GitHubRepo}
-      #  Pipeline: https://github.com/MarcGuiselin/aws-transmutation
-      #  Project: !Ref PipelineName
       Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -598,12 +552,9 @@ Resources:
           - Effect: Allow
             Principal:
               Service:
-                - "codepipeline.amazonaws.com"
+                - codepipeline.amazonaws.com
             Action:
               - "sts:AssumeRole"
-      ManagedPolicyArns:
-        # TODO: tighten down on permissions
-        - arn:aws:iam::aws:policy/AdministratorAccess
       Policies:
         # Access to build artifact bucket
         - PolicyName: s3-access
@@ -612,10 +563,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - "s3:DeleteObject"
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                  - "s3:PutObject"
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
               - Effect: Allow
@@ -631,10 +582,43 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - "codebuild:StartBuild"
-                  - "codebuild:BatchGetBuilds"
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
                 Resource:
                   - !GetAtt Build.Arn
+                  - !GetAtt Deploy.Arn
+                  - !If
+                    - HasFeatureIntegration
+                    - !GetAtt Integration.Arn
+                    - !Ref AWS::NoValue
+                  - !If
+                    - HasFeatureCleanup
+                    - !GetAtt Cleanup.Arn
+                    - !Ref AWS::NoValue
+        # Allow cloudformation to deploy changes to the deployment stack
+        - PolicyName: deploy-cloudformation-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet 
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DescribeChangeSet
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+        # Give pipelines same permissions as deploy
+        - PolicyName: deploy-iam-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt DeployRole.Arn
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -649,32 +633,191 @@ Resources:
               Service:
                 - codebuild.amazonaws.com
         Version: '2012-10-17'
-      Path: /service-role/
-  CodeBuildPolicy:
-    Type: AWS::IAM::Policy
+      ManagedPolicyArns:
+        # TODO: tighten down on permissions
+        # - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/AWSCodeBuildReadOnlyAccess
+      Policies:
+        # Access to build artifact bucket
+        - PolicyName: codebuild-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              #- Action:
+              #    - logs:CreateLogGroup
+              #    - logs:CreateLogStream
+              #  Effect: Allow
+              #  Resource:
+              #    - '*'
+              #- Action:
+              #    - logs:PutLogEvents
+              #  Effect: Allow
+              #  Resource:
+              #    - !Sub arn:${AWS::Partition}:logs:::log-group:/aws/codebuild/*
+              #- Action:
+              #    - s3:PutObject
+              #    - s3:GetObject
+              #    - s3:GetObjectVersion
+              #  Effect: Allow
+              #  Resource:
+              #    - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
+              #- Action:
+              #    - s3:ListBucket
+              #  Effect: Allow
+              #  Resource:
+              #    - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
+              # https://docs.aws.amazon.com/codebuild/latest/userguide/sample-ecr.html
+              #- Action:
+              #    - ecr:GetDownloadUrlForLayer
+              #    - ecr:BatchGetImage
+              #    - ecr:BatchCheckLayerAvailability
+              #  Effect: Allow
+              #  Principal: 
+              #    AWS:
+              #      - !Ref AWS::AccountId
+              - Action: 
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-build
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-build:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-deploy
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-deploy:*
+              - Action:
+                  - s3:*
+                Effect: Allow
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}*
+              - Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                Effect: Allow
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${PipelineName}*
+  DeployRole:
+    Type: AWS::IAM::Role
     Properties:
-      PolicyName: !Sub codebuild-access-${AWS::StackName}
-      Roles:
-        - !Ref CodeBuildRole
-      PolicyDocument:
-        Version: '2012-10-17'
+      RoleName: !Sub ${PipelineName}-deploy-role
+      Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
-          - Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*
-          - Action:
-              - s3:PutObject
-              - s3:GetObject
-              - s3:GetObjectVersion
-            Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
-          - Action:
-              - s3:ListBucket
-            Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        # TODO: tighten down on permissions
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Policies:
+        # Very generic policies
+        - PolicyName: access-to-everything
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - iam:PassRole
+                Resource: "*"
+                Effect: Allow
+                Condition:
+                  StringEqualsIfExists:
+                    iam:PassedToService:
+                    - cloudformation.amazonaws.com
+                    - elasticbeanstalk.amazonaws.com
+                    - ec2.amazonaws.com
+                    - ecs-tasks.amazonaws.com
+              - Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:RegisterApplicationRevision
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - elasticbeanstalk:*
+                  - ec2:*
+                  - elasticloadbalancing:*
+                  - autoscaling:*
+                  - cloudwatch:*
+                  - s3:*
+                  - sns:*
+                  - cloudformation:*
+                  - rds:*
+                  - sqs:*
+                  - ecs:*
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - lambda:InvokeFunction
+                  - lambda:ListFunctions
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - opsworks:CreateDeployment
+                  - opsworks:DescribeApps
+                  - opsworks:DescribeCommands
+                  - opsworks:DescribeDeployments
+                  - opsworks:DescribeInstances
+                  - opsworks:DescribeStacks
+                  - opsworks:UpdateApp
+                  - opsworks:UpdateStack
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:ValidateTemplate
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - devicefarm:ListProjects
+                  - devicefarm:ListDevicePools
+                  - devicefarm:GetRun
+                  - devicefarm:GetUpload
+                  - devicefarm:CreateUpload
+                  - devicefarm:ScheduleRun
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - servicecatalog:ListProvisioningArtifacts
+                  - servicecatalog:CreateProvisioningArtifact
+                  - servicecatalog:DescribeProvisioningArtifact
+                  - servicecatalog:DeleteProvisioningArtifact
+                  - servicecatalog:UpdateProduct
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - cloudformation:ValidateTemplate
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - ecr:DescribeImages
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - states:DescribeExecution
+                  - states:DescribeStateMachine
+                  - states:StartExecution
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - appconfig:StartDeployment
+                  - appconfig:StopDeployment
+                  - appconfig:GetDeployment
+                Resource: "*"
+                Effect: Allow
