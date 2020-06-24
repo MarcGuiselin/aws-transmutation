@@ -494,6 +494,8 @@ Resources:
             Value: !Ref PipelineStage
           - Name: PIPELINE_STACK_NAME
             Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
   # Deploy Pipeline Step
   Deploy:
     Type: AWS::CodeBuild::Project
@@ -520,6 +522,8 @@ Resources:
             Value: !Ref PipelineStage
           - Name: PIPELINE_STACK_NAME
             Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
   # Integration Tests Pipeline Step
   Integration:
     Type: AWS::CodeBuild::Project
@@ -546,7 +550,9 @@ Resources:
           - Name: PIPELINE_STAGE
             Value: !Ref PipelineStage
           - Name: PIPELINE_STACK_NAME
-            Value: !Ref DeployStackName 
+            Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
   # Cleanup Pipeline Step
   Cleanup:
     Type: AWS::CodeBuild::Project
@@ -574,6 +580,8 @@ Resources:
             Value: !Ref PipelineStage
           - Name: PIPELINE_STACK_NAME
             Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
   # Roles and Policies
   PipelineRole:
     Type: AWS::IAM::Role
