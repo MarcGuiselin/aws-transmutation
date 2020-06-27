@@ -231,7 +231,7 @@ Resources:
   GitHubWebhook:
     Type: AWS::CodePipeline::Webhook
     Properties:
-      Name: !Sub ${PipelineName}-github-hook
+      Name: !Sub ${PipelineName}--github-hook
       AuthenticationConfiguration:
         SecretToken: !Ref GitHubOAuthToken
       Filters:
@@ -246,7 +246,7 @@ Resources:
   GitHubStatusUpdate:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ${PipelineName}-status-update
+      FunctionName: !Sub ${PipelineName}--status-update
       Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
       CodeUri: github-status-update/
       Handler: index.handler
@@ -275,7 +275,7 @@ Resources:
   GitHubStatusUpdateRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-status-update-role
+      RoleName: !Sub ${PipelineName}--status-update-role
       Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -311,7 +311,7 @@ Resources:
   PipelineArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${PipelineName}-artifacts
+      BucketName: !Sub ${PipelineName}--artifacts
       # Don't keep outdated builds
       LifecycleConfiguration:
         Rules:
@@ -446,7 +446,7 @@ Resources:
   Build:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub ${PipelineName}-build
+      Name: !Sub ${PipelineName}--build
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -470,7 +470,7 @@ Resources:
   Deploy:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub ${PipelineName}-deploy
+      Name: !Sub ${PipelineName}--deploy
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -495,7 +495,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Condition: HasFeatureIntegration
     Properties:
-      Name: !Sub ${PipelineName}-integration
+      Name: !Sub ${PipelineName}--integration
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -520,7 +520,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Condition: HasFeatureCleanup
     Properties:
-      Name: !Sub ${PipelineName}-cleanup
+      Name: !Sub ${PipelineName}--cleanup
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -544,7 +544,7 @@ Resources:
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-role
+      RoleName: !Sub ${PipelineName}--role
       Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -622,7 +622,7 @@ Resources:
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-codebuild-role
+      RoleName: !Sub ${PipelineName}--codebuild-role
       Description: !Sub "Used in CodeBuild project. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Statement:
@@ -681,10 +681,7 @@ Resources:
                   - logs:PutLogEvents
                 Effect: Allow
                 Resource: 
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-build
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-build:*
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-deploy
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}-deploy:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}--*
               - Action:
                   - s3:*
                 Effect: Allow
@@ -701,7 +698,7 @@ Resources:
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}-deploy-role
+      RoleName: !Sub ${PipelineName}--deploy-role
       Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
