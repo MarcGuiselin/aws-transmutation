@@ -306,7 +306,75 @@ Resources:
       #            - codepipeline:GetPipelineState
       #            - codepipeline:GetPipelineExecution
       #          Resource:
-      #            - !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+      #            - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+  # Once cloudformation resources are done being created, we need to update the codebuild permissions so they can access these resources
+  PermissionsUpdate:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${PipelineName}--perm-update
+      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      CodeUri: permissions-update/
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 10
+      Role: !GetAtt PermissionsUpdateRole.Arn
+      Environment:
+        Variables:
+          STACK_NAME: !Ref DeployStackName
+          ROLE_NAME: !Ref CodeBuildRole
+          POLICY_NAME: DYNAMICALLY-UPDATED-deployed-resources-access
+          AWS_PARTITION: !Ref AWS::Partition
+          AWS_ACCOUNT: !Ref AWS::AccountId
+  PermissionsUpdateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${PipelineName}--perm-update-role
+      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        # https://docs.aws.amazon.com/codepipeline/latest/userguide/actions-invoke-lambda-function.html#actions-invoke-lambda-function-create-function
+        - PolicyName: pipeline-notify
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                Resource:
+                  - '*'
+        # Get a list of the resources published by our stack
+        - PolicyName: describe-stack-resources
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStackResources
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+        # Allow edit of the codepipeline role
+        - PolicyName: edit-codepipeline-role
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PutRolePolicy
+                Resource:
+                  - !GetAtt CodeBuildRole.Arn
   # S3 bucket containing build artifacts
   PipelineArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -377,7 +445,7 @@ Resources:
                   - !Sub BuildArtifact::${CloudFormationTemplateConfigurationPath}
                   - !Ref AWS::NoValue
                 TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
-                ChangeSetName: !Sub a-${DeployStackName}-Deploy
+                ChangeSetName: !Sub ${DeployStackName}--changeset
               RunOrder: 1
             - Name: ExecuteChangeSet
               ActionTypeId:
@@ -388,8 +456,17 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
                 StackName: !Ref DeployStackName
-                ChangeSetName: !Sub a-${DeployStackName}-Deploy
+                ChangeSetName: !Sub ${DeployStackName}--changeset
               RunOrder: 2
+            - Name: UpdatePermissions
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: '1'
+              Configuration:
+                FunctionName: !Ref PermissionsUpdate
+              RunOrder: 3
             - Name: Deploy
               ActionTypeId:
                 Category: Build
@@ -400,7 +477,7 @@ Resources:
                 ProjectName: !Ref Deploy
               InputArtifacts:
                 - Name: SourceArtifact
-              RunOrder: 3
+              RunOrder: 4
         - !If
           - HasFeatureIntegration
           - Name: Integration
@@ -575,6 +652,16 @@ Resources:
                   - "s3:GetBucketPolicy"
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
+        # Access to build artifact bucket
+        - PolicyName: invoke-permission-update-function
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt PermissionsUpdate.Arn
         # Access to code build/deployment
         - PolicyName: codebuild-access
           PolicyDocument:
@@ -635,46 +722,32 @@ Resources:
         Version: '2012-10-17'
       ManagedPolicyArns:
         # TODO: tighten down on permissions
-        # - arn:aws:iam::aws:policy/AdministratorAccess
         - arn:aws:iam::aws:policy/AWSCodeBuildReadOnlyAccess
       Policies:
         # Access to build artifact bucket
+        - PolicyName: s3-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
+        # Access to logs and reports
         - PolicyName: codebuild-access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              #- Action:
-              #    - logs:CreateLogGroup
-              #    - logs:CreateLogStream
-              #  Effect: Allow
-              #  Resource:
-              #    - '*'
-              #- Action:
-              #    - logs:PutLogEvents
-              #  Effect: Allow
-              #  Resource:
-              #    - !Sub arn:${AWS::Partition}:logs:::log-group:/aws/codebuild/*
-              #- Action:
-              #    - s3:PutObject
-              #    - s3:GetObject
-              #    - s3:GetObjectVersion
-              #  Effect: Allow
-              #  Resource:
-              #    - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
-              #- Action:
-              #    - s3:ListBucket
-              #  Effect: Allow
-              #  Resource:
-              #    - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
-              # https://docs.aws.amazon.com/codebuild/latest/userguide/sample-ecr.html
-              #- Action:
-              #    - ecr:GetDownloadUrlForLayer
-              #    - ecr:BatchGetImage
-              #    - ecr:BatchCheckLayerAvailability
-              #  Effect: Allow
-              #  Principal: 
-              #    AWS:
-              #      - !Ref AWS::AccountId
               - Action: 
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
@@ -683,11 +756,6 @@ Resources:
                 Resource: 
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}--*
               - Action:
-                  - s3:*
-                Effect: Allow
-                Resource: 
-                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}*
-              - Action:
                   - codebuild:CreateReportGroup
                   - codebuild:CreateReport
                   - codebuild:UpdateReport
@@ -695,6 +763,49 @@ Resources:
                 Effect: Allow
                 Resource: 
                   - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${PipelineName}*
+        # Allow codebuild to get stack details including output
+        - PolicyName: cloudformation-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+        # Access to all deployed resources by their ResourceTag
+        - PolicyName: DYNAMICALLY-UPDATED-deployed-resources-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Athena, RDS, and many others.
+              # Supports all marked as "Authorization based on tags" under https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-services-that-work-with-iam.html
+              - Effect: Allow
+                Action:
+                  - '*'
+                Resource:
+                  - '*'
+                Condition:
+                  StringEquals: 
+                    'aws:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
+              ## Unfortunately S3 does not have a conditional key for ResourceTag or anything similar.
+              ## So for now, full acess to all s3 buckets is provided.
+              ## TODO: need to find a way around this...
+              ## https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html
+              #- Effect: Allow
+              #  Action:
+              #    - s3:*
+              #  Resource:
+              #    - '*'
+              ## EC2
+              #- Effect: Allow
+              #  Action:
+              #    - 'ec2:*'
+              #  Resource:
+              #    - '*'
+              #  Condition:
+              #    StringEquals: 
+              #      'ec2:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
