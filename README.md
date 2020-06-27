@@ -46,7 +46,7 @@ With a pipeline template it becomes possible for anyone to easily launch their o
 ## Getting Started
 
 1. Fork the example repo located at https://github.com/MarcGuiselin/aws-transmutation-starter
-2. Create GitHub OAuth Token
+1. Create GitHub OAuth Token
     
     > General instructions for creating a GitHub OAuth token can be found [here](https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line)
     
@@ -54,69 +54,69 @@ With a pipeline template it becomes possible for anyone to easily launch their o
 
     <img src="images/github-token-permissions.png">
 
-3. This project will have CI on `staging` and `trying` (for Bors-NG) and CD on `master` for production, so we will create a pipeline for each. You can skip `trying` if you are not using a merge bot like Bors-NG.
+1. This project will have CI on `staging` and `trying` (for Bors-NG) and CD on `master` for production, so we will create a pipeline for each. You can skip `trying` if you are not using a merge bot like Bors-NG.
     
     - Launch Transmutation Pipeline Stack for `master` using the button below.
 
         [![Launch Stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=aws-transmutation-starter-master-pipeline&templateURL=https://s3.amazonaws.com/aws-transmutation-pipeline/template.yaml)
 
         1. Click __Next__
-        2. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-master-pipeline`
-        3. Rename __Deploy Stack Name__ to `my-transmutation-starter-master-stack`
-        4. Select __Stage__ `prod`
-        5. Select __Features__ `Build > Deploy`
-        6. Input your __GitHub OAuth Token__
-        7. Input the __Repo Owner / Name__ for your forked repository
-        8. Input `master` for your __Branch__
-        9. We want to load the parameters for production deployment, so rename __CloudFormation Template Configuration__ to `prod-configuration.json`
-        10. Click __Next__
-        11. Click __Next__ again
-        12. Acknowledge __Access Capabilities__
-        13. Click __Create stack__
+        1. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-master-pipeline`
+        1. Rename __Deploy Stack Name__ to `my-transmutation-starter-master-stack`
+        1. Select __Stage__ `prod`
+        1. Select __Features__ `Build > Deploy`
+        1. Input your __GitHub OAuth Token__
+        1. Input the __Repo Owner / Name__ for your forked repository
+        1. Input `master` for your __Branch__
+        1. We want to load the parameters for production deployment, so rename __CloudFormation Template Configuration__ to `prod-configuration.json`
+        1. Click __Next__
+        1. Click __Next__ again
+        1. Acknowledge __Access Capabilities__
+        1. Click __Create stack__
     
     - Launch Transmutation Pipeline Stack for `staging` using the button below.
 
         [![Launch Stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=aws-transmutation-starter-staging-pipeline&templateURL=https://s3.amazonaws.com/aws-transmutation-pipeline/template.yaml)
 
         1. Click __Next__
-        2. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-staging-pipeline`
-        3. Rename __Deploy Stack Name__ to `my-transmutation-starter-staging-stack`
-        4. Select __Features__ `Build > Deploy > Integration > Cleanup`
-        5. Input your __GitHub OAuth Token__
-        6. Input the __Repo Owner / Name__ for your forked repository
-        7. Input `staging` for your __Branch__
-        8. Click __Next__
-        9. Click __Next__ again
-        10. Acknowledge __Access Capabilities__
-        11. Click __Create stack__
+        1. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-staging-pipeline`
+        1. Rename __Deploy Stack Name__ to `my-transmutation-starter-staging-stack`
+        1. Select __Features__ `Build > Deploy > Integration > Cleanup`
+        1. Input your __GitHub OAuth Token__
+        1. Input the __Repo Owner / Name__ for your forked repository
+        1. Input `staging` for your __Branch__
+        1. Click __Next__
+        1. Click __Next__ again
+        1. Acknowledge __Access Capabilities__
+        1. Click __Create stack__
     
     - Launch Transmutation Pipeline Stack for `trying` using the button below. (optional)
 
         [![Launch Stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=aws-transmutation-starter-trying-pipeline&templateURL=https://s3.amazonaws.com/aws-transmutation-pipeline/template.yaml)
 
         1. Click __Next__
-        2. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-trying-pipeline`
-        3. Rename __Deploy Stack Name__ to `my-transmutation-starter-trying-stack`
-        4. Select __Features__ `Build > Deploy > Integration > Cleanup`
-        5. Input your __GitHub OAuth Token__
-        6. Input the __Repo Owner / Name__ for your forked repository
-        7. Input `trying` for your __Branch__
-        8. Click __Next__ 
-        9. Click __Next__ again
-        10. Acknowledge __Access Capabilities__
-        11. Click __Create stack__ 
+        1. Rename __Pipeline Configuration Name__ to `my-transmutation-starter-trying-pipeline`
+        1. Rename __Deploy Stack Name__ to `my-transmutation-starter-trying-stack`
+        1. Select __Features__ `Build > Deploy > Integration > Cleanup`
+        1. Input your __GitHub OAuth Token__
+        1. Input the __Repo Owner / Name__ for your forked repository
+        1. Input `trying` for your __Branch__
+        1. Click __Next__ 
+        1. Click __Next__ again
+        1. Acknowledge __Access Capabilities__
+        1. Click __Create stack__ 
 
-4. Install Bors-NG (optional)
+1. Install Bors-NG (optional)
     - [Give Bors access to your repo](https://github.com/apps/bors/installations/new/permissions?target_id=24906387)
     - Select `Only select repositories`
     - Select your forked repository
     - Click __Install__
     > You can also [Setup your own Bors-NG instance](https://github.com/bors-ng/bors-ng#how-to-set-up-your-own-real-instance)
 
-5. Clone your repo locally and create a `staging` branch
-6. Write some changes and commit
-6. Create a pull request on GitHub
-7. Confirm with Bors?
+1. Clone your repo locally and create a `staging` branch
+1. Write some changes and commit
+1. Create a pull request on GitHub
+1. Confirm with Bors?
 
 ## Develop With Git Branches
 
