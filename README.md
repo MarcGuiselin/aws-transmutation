@@ -1,10 +1,12 @@
 # <img src="images/icon.png" align="center"> (WIP) AWS Transmutation CD Pipeline
 
-![Build Status](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoidjhhbk05VFZnK2RWRjdQNWdzWTZ1ZWkvMlYrVHpodi9ZNGV1SERweGphazZ5NU9MU2lxdGdmdUxlaGJJc1RrV0JvNGlWcnBQK0U2dmJFQUxocFl4NHhNPSIsIml2UGFyYW1ldGVyU3BlYyI6IlhKVjJaWXFhZFFyaXZHRTQiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master) [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/3)
+![Build Status](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoidjhhbk05VFZnK2RWRjdQNWdzWTZ1ZWkvMlYrVHpodi9ZNGV1SERweGphazZ5NU9MU2lxdGdmdUxlaGJJc1RrV0JvNGlWcnBQK0U2dmJFQUxocFl4NHhNPSIsIml2UGFyYW1ldGVyU3BlYyI6IlhKVjJaWXFhZFFyaXZHRTQiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)
 
 > A Modern Multi-Purpose Continuous Deployment Pipeline Template for AWS
 
-__Help needed fine tuning permissions!__
+🧐 __Feedback Welcome:__ Please submit issues about design quirks and problems!
+
+👩‍🔧 __Contributors Wanted:__ Help needed reviewing and adding features
 
 ## Why Transmute?
 
@@ -13,7 +15,7 @@ Stop wasting time with the aws web console and manage your own build + deploymen
 - Develop on __GitHub__
 - Automatic github __Status Updates__
 - No-hastle __Continuous Deployment__ solution
-    - Configure pipelines once
+    - Configure pipelines once.
     - All project specific build commands live in your repo. Use aws CLI for deployment!
 - Use the __Same Pipeline Template__ for individual branches
     - For example, configure for testing and run `staging` branch CI
@@ -25,7 +27,7 @@ Stop wasting time with the aws web console and manage your own build + deploymen
 
 > Write code and seamlessly automate testing and deployment.
 
-### Piece of cake 🍰 with AWS Transmutation Pipeline. Take a look at this example production setup:
+__Piece of cake 🍰 with AWS Transmutation Pipeline. Take a look at this example production setup:__
 
 - __Minimum Effort__ deployment from pull requests. Everything else is automatic!
 - __Pull Request Continuous Integration with [Bors-NG](https://bors.tech/):__ Merges to `master` & deployments only happen when your tests succeed!
@@ -35,11 +37,13 @@ Stop wasting time with the aws web console and manage your own build + deploymen
 
 ## Separate Testing and Production environments for safety
 
-Every pipeline is a separate entity! Keep your deployment pipeline on a production AWS account and all your testing on accounts you can afford to accidentally mess stuff up in! All cross cumminication happens withing git enabled by status updates.
+Every pipeline is a separate entity! Keep your deployment pipeline on a production AWS account and all your testing on accounts you can afford to accidentally mess stuff up in! All cross communication happens within git enabled by live status updates.
 
-## Forget local development. Try live development!
+## Live Development
 
 Local development can be hit or miss. It's not always possible to perfectly replicate AWS on your local machine, and often requires paid tools like [localstack](https://localstack.cloud/) to do so accurately.
+
+Add Transmutation template to your toolset. Develop locally and then push with confidence.
 
 With a pipeline template it becomes possible for anyone to easily launch their own pipeline and automate test deployment. Any developer sets up a Transmutation pipeline on their own account and configure it to deploy a specific development git branch. Commit changes and wait for build to succeede (or not)! Cheapen and simplify the way your develop.
 
@@ -108,7 +112,7 @@ With a pipeline template it becomes possible for anyone to easily launch their o
 
 1. Install Bors-NG (optional)
     - [Give Bors access to your repo](https://github.com/apps/bors/installations/new/permissions?target_id=24906387)
-    - Select `Only select repositories`
+    - Click `Only select repositories`
     - Select your forked repository
     - Click __Install__
     > You can also [Setup your own Bors-NG instance](https://github.com/bors-ng/bors-ng#how-to-set-up-your-own-real-instance)
@@ -154,16 +158,60 @@ my-transmutation-repo
 └ prod-configuration.json # Configure CloudFormation parameters for production builds
 ````
 
-## Environment Variables
+## Details
+
+### Dynamic Permissions
+
+Transmutation does something a little naughty: it rewrites deployment (CodeBuild) permissions every time your stack is deployed. The `PermissionsUpdate` lambda function reads all the resources created from your stack and writes new permissions that allow codebuild to have access to these resources. What this means is that you never have to rewrite your pipeline's permissions even as your own `CloudFormation` stack grows!
+
+#### Supported Resources
+
+> Help needed adding more! Submit a pull request.
+
+Raw definitions to these supported resource types are in [`aws-arn-from-resource-id.js`](https://github.com/MarcGuiselin/aws-transmutation/tree/master/src/permissions-update)
+
+
+| Compute       | Storage    | Database | Networking        |
+|---------------|------------|----------|-------------------|
+| EC2 (partial) | S3         | RDS      | VPC (partial)     |
+| Lambda        | S3 Glacier | DynamoDB | CloudFront        |
+|               | EFS        |          | Route53 (partial) |
+
+#### Justification
+
+A number of issues and major services like `s3` and `dynamodb`  do not support ResourceTag based [global condition keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html) (see the listed resource-based policies [here](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-services-that-work-with-iam.html)). In addition some services like `CloudFront` do not have the tag `aws:cloudformation:stack-name` automatically populated when they are created. Hence a rule that relied on this tag could not work. A script, however, could cover a much broader range of resources.
+
+The way this script is implemented guarantees that no erroneous or overly permissive permissions are added. This policy ends up looking something like this:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": {
+        "Effect": "Allow",
+        "Action": "*",
+        "Resource": [
+            "arn:aws:cloudfront::123456789123:distribution/ABCDEFGHIJKLMN",
+            "arn:aws:apigateway:us-east-1:123456789123:/apis/abcdefghij",
+            "arn:aws:apigateway:us-east-1:123456789123:/apis/abcdefghij/*",
+            "arn:aws:s3:::my-bucket",
+            "arn:aws:s3:::my-bucket/*"
+        ]
+    }
+}
+```
+
+Remember that these auto-generated permissions are __only given to the codebuild resources which run each of your pipeline yaml files__. Obviously this will not work for everyone, so you can disable `Automatic Build Permissions` when creating your pipeline. This will remove this step.
+
+### Environment Variables
 
 All pipeline steps are executed using AWS CodeBuild virtual containers that will run respective `yaml` files. Your commands will have access to the following environment variables:
 
 - `PIPELINE_BUCKET` = name of artifact bucket
 - `PIPELINE_STAGE` = either `prod` or `test`
 - `PIPELINE_STACK_NAME` = name of the stack we are deploying to
-- load more from `prod.env` or `test.env` files with the command `export $(cat $PIPELINE_STAGE.env | xargs)`
+- Load more from `prod.env` or `test.env` files with the command `export $(cat $PIPELINE_STAGE.env | xargs)`
 
-## Configuring differences in prod and test deployments
+### Configuring differences in prod and test deployments
 
 Say you want to release your production to a real domain, but don't want to deploy test builds to that same domain as well!
 
@@ -171,7 +219,7 @@ Instead of hard coding values like a domain name in your template, use CloudForm
 
 For example, [aws-transmutation-starter](https://github.com/MarcGuiselin/aws-transmutation-starter) if you don't set `Domain`, the template will output the cloudfront distribution url to the static website and api. However, if you set a `Domain` the template will configure a Route53 to the domain and link our static site and api through it.
 
-## Using template outputs
+### Using template outputs
 
 There are many ways to get outputs from your template, but the most straight forward method gets outputs using the aws cli and export the output as an environment variable like so:
 
@@ -189,11 +237,9 @@ phases:
         )"
 ```
 
-## Common Questions:
+### How do I change/delete my pipeline now that my code is in production?
 
-### Q: How do I change/delete my pipeline now that my code is in production?
-
-__A:__ Find your pipeline stack and delete it. This won't affect your production stack. You can then create your own custom pipeline or recreate a Transmutation Pipeline using the same name and branch.
+Find your pipeline stack and delete it. This won't affect your production stack. You can then create your own custom pipeline or recreate a Transmutation Pipeline using the same name and branch.
 
 ## Thanks
 
