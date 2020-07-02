@@ -15,16 +15,26 @@ phases:
       - cd src/github-status-update
       - yarn install
       - cd ../..
+      # Install dependencies for github-webhooks
+      - cd src/github-webhooks
+      - yarn install
+      - cd ../..
   build:
     commands:
-      - ls
       # Template lint check
       - cfn-lint -t src/template.yaml
-      # Package sam create template
+      - cfn-lint -t src/pipeline.yaml
+      # Package templates
       - >
         sam package \
           --template-file src/template.yaml \
           --output-template-file packaged-template.yaml \
           --s3-bucket $PIPELINE_BUCKET
-      # Upload Template
+      - >
+        sam package \
+          --template-file src/pipeline.yaml \
+          --output-template-file packaged-pipeline.yaml \
+          --s3-bucket $PIPELINE_BUCKET
+      # Upload templates
       - aws s3 cp packaged-template.yaml "s3://$PIPELINE_BUCKET/template.yaml" 
+      - aws s3 cp packaged-pipeline.yaml "s3://$PIPELINE_BUCKET/pipeline.yaml" 

@@ -21,125 +21,54 @@ Metadata:
       - Label:
           default: Pipeline Configuration
         Parameters: 
-          - PipelineName
-          - DeployStackName
-          - PipelineStage
-          - PipelineFeatures
-          - EnvironmentComputeType
+          - ProjectName
+          - AutoPermissions
       - Label:
           default: Source (GitHub)
         Parameters:
-          - GitHubOAuthToken
-          - GitHubOwner
-          - GitHubRepo
-          - GitHubBranch
-      - Label: 
-          default: Files
-        Parameters:
-          - PackagedTemplatePath
-          - CloudFormationTemplateConfigurationPath
-          - BuildSpecPath
-          - DeploySpecPath
-          - IntegSpecPath
-          - CleanupSpecPath
+          - GithubToken
+          - GithubSecret
+          - GithubOwner
+          - GithubRepo
     ParameterLabels:
       # Pipeline Configuration
-      PipelineName:
-        default: Name
-      DeployStackName:
-        default: Deploy Stack Name
-      PipelineStage:
-        default: Stage
-      PipelineFeatures:
-        default: Features
-      EnvironmentComputeType:
-        default: Compute
-      EnablePermissionsUpdate:
+      ProjectName:
+        default: Project Name
+      AutoPermissions:
         default: Automatic Permissions Update
       # Source (GitHub)
-      GitHubOAuthToken:
+      GithubToken:
         default: OAuth Token
-      GitHubOwner:
-        default: Owner
-      GitHubRepo:
-        default: Name
-      GitHubBranch:
-        default: Branch
-      # Files
-      PackagedTemplatePath:
-        default: Packaged Template
-      CloudFormationTemplateConfigurationPath:
-        default: CloudFormation Template Configuration
-      BuildSpecPath:
-        default: Build Spec
-      DeploySpecPath:
-        default: Deploy Spec (Optional depending on Features)
-      IntegSpecPath:
-        default: Integ Spec (Optional depending on Features)
-      CleanupSpecPath:
-        default: Cleanup Spec (Optional depending on Features)
+      GithubSecret:
+        default: Webhook Secret
+      GithubOwner:
+        default: Repo Owner (https://github.com/__this__/repo)
+      GithubRepo: 
+        default: Repo Name (https://github.com/owner/__this__)
 
 Parameters:
   # Pipeline Configuration
-  PipelineName:
+  ProjectName:
     Type: String
-    Default: my-transmutation-demo
-    AllowedPattern: '^[A-Za-z0-9\-]+$'
+    Default: my-project
     Description: >
-      The name for the entire pipeline. Alphanumeric separated by hyphens.
+      The UNIQUE name for your project. Alphanumeric separated by hyphens.
       
       All resources belonging to the pipeline will follow similar naming conventions including
-      "my-transmutation-demo-codebuild", "my-transmutation-demo-master-pipeline",
-      "my-transmutation-demo-pipeline-artifact-bucket", etc
-  DeployStackName:
-    Type: String
-    Default: my-transmutation-demo-test-stack
-    AllowedPattern: '^[A-Za-z0-9\-]+$'
-    Description: >
-      The name of the stack this pipeline will deploy to.
-  PipelineStage:
-    Type: String
-    Default: test
-    AllowedValues:
-      - test
-      - prod
-    Description: >
-      Does this pipeline create staging/trying test builds or final production build?
-      
-      This value manifests itself as the PIPELINE_STAGE environment variable for all 
-      pipeline scripts and can be used to load more environment variables from test.env and
-      prod.env files.
-  PipelineFeatures:
-    Type: String
-    Default: Build > Deploy > Integration > Cleanup
-    AllowedValues:
-      - Build > Deploy
-      #- Build > Deploy > Manual Review
-      #- Build > Deploy > Manual Review > Cleanup
-      - Build > Deploy > Integration
-      - Build > Deploy > Integration > Cleanup
-      #- Build > Deploy > Integration > Manual Review > Cleanup
-    Description: >
-      Select the features you'd like your pipeline to have
-  EnvironmentComputeType:
-    AllowedValues:
-      - BUILD_GENERAL1_SMALL
-      - BUILD_GENERAL1_MEDIUM
-      - BUILD_GENERAL1_LARGE
-    Default: BUILD_GENERAL1_SMALL
-    Description: >
-      AWS CodeBuild (build/deploy/integration/cleanup stage) compute instance type.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
-    Type: String
-  EnablePermissionsUpdate:
+      "my-project--cd--master-branch-pipeline", "my-project--cd--staging-branch-build",
+      "my-project--cd--artifacts-bucket", etc
+
+      Deployed stacks will also suse this name: "my-project--master-branch-stack",
+      "my-project--staging-branch-stack", etc
+  AutoPermissions:
     Description: After CloudFormation stack deployment rewrite codebuild rules to give scripts access to deployed resources. Disable this if you want to write your own permissions.
     Type: String
     AllowedValues:
-      - true
-      - false
-    Default: true
+      - Enabled
+      - Disabled
+    Default: Enabled
   # Source (GitHub)
-  GitHubOAuthToken:
+  GithubToken:
     Type: String
     Default: ''
     AllowedPattern: '^[A-Za-z0-9]*$'
@@ -151,124 +80,110 @@ Parameters:
       and "admin:repo_hook" scopes, which will automatically select all
       permissions under those two scopes.
     NoEcho: true
-  GitHubOwner:
+  GithubSecret:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[A-Za-z0-9]*$'
+    Description: >
+      GitHub webhook secret
+    NoEcho: true
+  GithubOwner:
     Type: String
     Default: ''
     AllowedPattern: '^\S*$'
     Description: >
       GitHub username owning the repo
-  GitHubRepo:
+  GithubRepo:
     Type: String
     Default: ''
     AllowedPattern: '^\S*$'
     Description: >
       GitHub repo name
-  GitHubBranch:
-    Type: String
-    Default: ''
-    AllowedPattern: '^\S*$'
-    Description: >
-      GitHub repo branch name. Recommended values are: master, staging and trying
-  # Files
-  PackagedTemplatePath:
-    Type: String
-    Default: packaged-template.yaml
-    Description: >
-      Make sure your build script packages your template as this file. 
-  CloudFormationTemplateConfigurationPath:
-    Type: String
-    Default: test-configuration.json
-    AllowedPattern: '^(.*\.json)?$'
-    Description: >
-      Relative CloudFormation json template configuration file. Keep this value empty to not load a file. 
-      Use this for CloudFormation Parameter overrides.
-      For more information, see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab1c13c17c15
-  BuildSpecPath:
-    Type: String
-    Default: build.yaml
-    Description: >
-      Relative BuildSpec file path for build stage.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
-  DeploySpecPath:
-    Type: String
-    Default: deploy.yaml
-    Description: >
-      Relative BuildSpec file path for deployment stage.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
-  IntegSpecPath:
-    Type: String
-    Default: integ.yaml
-    Description: >
-      Relative BuildSpec file path for deployment stage.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
-  CleanupSpecPath:
-    Type: String
-    Default: cleanup.yaml
-    Description: >
-      Relative BuildSpec file path for deployment stage.
-      For more information, see https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
 
 Rules:
-  ValidateGitHub:
+  ValidateParameters:
     Assertions:
-      - Assert: !Not [!Equals [!Ref GitHubOAuthToken, '']]
-        AssertDescription: GitHubOAuthToken must be specified
-      - Assert: !Not [!Equals [!Ref GitHubOwner, '']]
-        AssertDescription: GitHubOwner must be specified
-      - Assert: !Not [!Equals [!Ref GitHubRepo, '']]
-        AssertDescription: GitHubRepo must be specified
-      - Assert: !Not [!Equals [!Ref GitHubBranch, '']]
-        AssertDescription: GitHubBranch must be specified
+      - Assert: !Not [!Equals [!Ref GithubToken, '']]
+        AssertDescription: GithubToken must be specified
+      - Assert: !Not [!Equals [!Ref GithubSecret, '']]
+        AssertDescription: GithubSecret must be specified
+      - Assert: !Not [!Equals [!Ref GithubOwner, '']]
+        AssertDescription: GithubOwner must be specified
+      - Assert: !Not [!Equals [!Ref GithubRepo, '']]
+        AssertDescription: GithubRepo must be specified
 
 Conditions:
-  HasFeatureIntegration: !Or
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration']
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
-  #HasFeatureManualReview: !Or
-  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review']
-  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review > Cleanup']
-  #  - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
-  HasFeatureCleanup: !Or
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Manual Review > Cleanup']
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
-    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Manual Review > Cleanup']
-  HasCloudFormationTemplateConfigurationPath: !Not [ !Equals [!Ref CloudFormationTemplateConfigurationPath, ''] ]
   HasPermissionsUpdate:
-    !Equals [!Ref EnablePermissionsUpdate, 'true']
+    !Equals [!Ref AutoPermissions, 'Enabled']
+
+Globals:
+  Function:
+    Handler: index.handler
+    Runtime: nodejs12.x
+    Timeout: 30
 
 Resources:
-  # Hook to github repository
-  GitHubWebhook:
-    Type: AWS::CodePipeline::Webhook
+  # API for GithubWebhooksFunction
+  GithubWebhookApi:
+    Type: AWS::Serverless::HttpApi
     Properties:
-      Name: !Sub ${PipelineName}--github-hook
-      AuthenticationConfiguration:
-        SecretToken: !Ref GitHubOAuthToken
-      Filters:
-        - JsonPath: "$.ref"
-          MatchEquals: refs/heads/{Branch}
-      Authentication: GITHUB_HMAC
-      TargetPipeline: !Ref Pipeline
-      TargetAction: GitHubSource
-      TargetPipelineVersion: !GetAtt Pipeline.Version
-      RegisterWithThirdParty: true
-  # Lambda function that updates GitHub Status
-  GitHubStatusUpdate:
+      StageName: $default
+  # Lambda function that receives project changes from github
+  GithubWebhooksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ${PipelineName}--status-update
-      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
-      CodeUri: github-status-update/
-      Handler: index.handler
-      Runtime: nodejs12.x
-      Timeout: 10
-      Role: !GetAtt GitHubStatusUpdateRole.Arn
+      FunctionName: !Sub ${ProjectName}--cd--github-webhooks
+      Description: !Sub Used by ${ProjectName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      CodeUri: github-webhooks/
+      # AutoPublishAlias: live # ?
       Environment:
         Variables:
-          GITHUB_OWNER: !Ref GitHubOwner
-          GITHUB_REPO: !Ref GitHubRepo
-          GITHUB_OAUTH_TOKEN: !Ref GitHubOAuthToken
+          PROJECT_NAME: !Ref ProjectName
+          AUTO_PERMISSIONS: !Ref AutoPermissions
+          GITHUB_TOKEN: !Ref GithubToken
+          GITHUB_SECRET: !Ref GithubSecret
+          GITHUB_OWNER: !Ref GithubOwner
+          GITHUB_REPO: !Ref GithubRepo
+          # Resources used by individual branch pipelines
+          ARTIFACTS_BUCKET: !Ref ArtifactsBucket
+          PERM_UPDATE_INVOKE: !If
+            - HasPermissionsUpdate
+            - !Ref PermissionsUpdateFunction
+            - ''
+          DEPLOY_ROLE_ARN: !GetAtt DeployRole.Arn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: '*'
+              Resource: '*'
+      Events:
+        WebhookPost:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: POST
+            ApiId: !Ref GithubWebhookApi
+        WebhookGet:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: GET
+            ApiId: !Ref GithubWebhookApi
+  # Lambda function that updates GitHub Status
+  GithubStatusUpdateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}--cd--status-update
+      Description: !Sub Used by ${ProjectName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      CodeUri: github-status-update/
+      Role: !GetAtt GithubStatusUpdateRole.Arn
+      Environment:
+        Variables:
+          PROJECT_NAME: !Ref ProjectName
+          GITHUB_OWNER: !Ref GithubOwner
+          GITHUB_REPO: !Ref GithubRepo
+          GITHUB_OAUTH: !Ref GithubToken
       Events:
         Event:
           Type: CloudWatchEvent
@@ -283,11 +198,11 @@ Resources:
                   - "STARTED"
                   - "SUCCEEDED"
                   - "FAILED"
-  GitHubStatusUpdateRole:
+  GithubStatusUpdateRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}--status-update-role
-      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      RoleName: !Sub ${ProjectName}--cd--status-update-role
+      Description: !Sub Used by ${ProjectName} pipeline. Created by CloudFormation ${AWS::StackId}.
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -319,12 +234,12 @@ Resources:
       #          Resource:
       #            - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
   # Once cloudformation resources are done being created, we need to update the codebuild permissions so they can access these resources
-  PermissionsUpdate:
+  PermissionsUpdateFunction:
     Type: AWS::Serverless::Function
     Condition: HasPermissionsUpdate
     Properties:
-      FunctionName: !Sub ${PipelineName}--perm-update
-      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      FunctionName: !Sub ${ProjectName}--cd--perm-update
+      Description: !Sub Used by ${ProjectName} pipeline. Created by CloudFormation ${AWS::StackId}.
       CodeUri: permissions-update/
       Handler: index.handler
       Runtime: nodejs12.x
@@ -332,8 +247,8 @@ Resources:
       Role: !GetAtt PermissionsUpdateRole.Arn
       Environment:
         Variables:
-          STACK_NAME: !Ref DeployStackName
-          ROLE_NAME: !Ref CodeBuildRole
+          #STACK_NAME: !Ref DeployStackName
+          #ROLE_NAME: !Ref CodeBuildRole
           POLICY_NAME: DYNAMICALLY-UPDATED-deployed-resources-access
           AWS_PARTITION: !Ref AWS::Partition
           AWS_ACCOUNT: !Ref AWS::AccountId
@@ -341,8 +256,8 @@ Resources:
     Type: AWS::IAM::Role
     Condition: HasPermissionsUpdate
     Properties:
-      RoleName: !Sub ${PipelineName}--perm-update-role
-      Description: !Sub Used by ${PipelineName} pipeline. Created by CloudFormation ${AWS::StackId}.
+      RoleName: !Sub ${ProjectName}--cd--perm-update-role
+      Description: !Sub Used by ${ProjectName} pipeline. Created by CloudFormation ${AWS::StackId}.
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -376,8 +291,9 @@ Resources:
                 Action:
                   - cloudformation:DescribeStackResources
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+                  - '*' #TODO
+                  #- !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}
+                  #- !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
         # Allow edit of the codepipeline role
         - PolicyName: edit-codepipeline-role
           PolicyDocument:
@@ -387,260 +303,44 @@ Resources:
                 Action:
                   - iam:PutRolePolicy
                 Resource:
-                  - !GetAtt CodeBuildRole.Arn
-  # S3 bucket containing build artifacts
-  PipelineArtifactsBucket:
+                  - '*' #TODO
+                  # - !GetAtt CodeBuildRole.Arn
+  # S3 bucket containing build artifacts for all branch pipelines
+  ArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${PipelineName}--artifacts
-      # Don't keep outdated builds
+      BucketName: !Sub ${ProjectName}--cd--artifacts
+      # Don't keep outdated resources
       LifecycleConfiguration:
         Rules:
           - ExpirationInDays: 1 # TODO: could parameterize
             Status: Enabled
-  # Pipeline that builds and deploys branch
-  Pipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: !Sub ${PipelineName}
-      ArtifactStore:
-        Location: !Ref PipelineArtifactsBucket
-        Type: S3
-      RoleArn: !GetAtt PipelineRole.Arn
-      Stages:
-        - Name: Source
-          Actions:
-            - Name: GitHubSource
-              ActionTypeId:
-                Category: Source
-                Owner: ThirdParty
-                Provider: GitHub
-                Version: "1"
-              Configuration:
-                Owner: !Ref GitHubOwner
-                OAuthToken: !Ref GitHubOAuthToken
-                Repo: !Ref GitHubRepo
-                Branch: master
-                PollForSourceChanges: false
-              OutputArtifacts:
-                - Name: SourceArtifact
-        - Name: Build
-          Actions:
-            - Name: Build
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Provider: CodeBuild
-                Version: '1'
-              Configuration:
-                ProjectName: !Ref Build
-              InputArtifacts:
-                - Name: SourceArtifact
-              OutputArtifacts:
-                - Name: BuildArtifact
-        - Name: Deploy
-          Actions:
-            - Name: CreateChangeSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: '1'
-              InputArtifacts:
-                - Name: BuildArtifact
-              Configuration:
-                ActionMode: CHANGE_SET_REPLACE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                RoleArn: !GetAtt DeployRole.Arn
-                StackName: !Ref DeployStackName
-                TemplateConfiguration: !If
-                  - HasCloudFormationTemplateConfigurationPath
-                  - !Sub BuildArtifact::${CloudFormationTemplateConfigurationPath}
-                  - !Ref AWS::NoValue
-                TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
-                ChangeSetName: !Sub ${DeployStackName}--changeset
-              RunOrder: 1
-            - Name: ExecuteChangeSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: '1'
-              Configuration:
-                ActionMode: CHANGE_SET_EXECUTE
-                StackName: !Ref DeployStackName
-                ChangeSetName: !Sub ${DeployStackName}--changeset
-              RunOrder: 2
-            - !If
-              - HasPermissionsUpdate
-              - Name: UpdatePermissions
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Provider: Lambda
-                  Version: '1'
-                Configuration:
-                  FunctionName: !Ref PermissionsUpdate
-                RunOrder: 3
-              - !Ref AWS::NoValue
-            - Name: Deploy
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Provider: CodeBuild
-                Version: '1'
-              Configuration:
-                ProjectName: !Ref Deploy
-              InputArtifacts:
-                - Name: SourceArtifact
-              RunOrder: !If
-                - HasPermissionsUpdate
-                - 4
-                - 3
-        - !If
-          - HasFeatureIntegration
-          - Name: Integration
-            Actions:
-              - Name: Integration
-                ActionTypeId:
-                  Category: Test
-                  Owner: AWS
-                  Provider: CodeBuild
-                  Version: '1'
-                Configuration:
-                  ProjectName: !Ref Integration
-                InputArtifacts:
-                  - Name: SourceArtifact
-          - !Ref AWS::NoValue
-        - !If
-          - HasFeatureIntegration
-          - Name: Cleanup
-            Actions:
-              - Name: Cleanup
-                ActionTypeId:
-                  Category: Build
-                  Owner: AWS
-                  Provider: CodeBuild
-                  Version: '1'
-                Configuration:
-                  ProjectName: !Ref Integration
-                InputArtifacts:
-                  - Name: SourceArtifact
-                RunOrder: 1
-              - Name: Delete Stack
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Provider: CloudFormation
-                  Version: '1'
-                Configuration:
-                  ActionMode: DELETE_ONLY
-                  StackName: !Ref DeployStackName
-                RunOrder: 2
-          - !Ref AWS::NoValue
-  # Build Pipeline Step
-  Build:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub ${PipelineName}--build
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: !Ref BuildSpecPath
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:4.0'
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: PIPELINE_BUCKET
-            Value: !Ref PipelineArtifactsBucket
-          - Name: PIPELINE_STAGE
-            Value: !Ref PipelineStage
-          - Name: PIPELINE_STACK_NAME
-            Value: !Ref DeployStackName
-          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
-            Value: !Ref PackagedTemplatePath
-  # Deploy Pipeline Step
-  Deploy:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub ${PipelineName}--deploy
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: !Ref DeploySpecPath
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:4.0'
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: PIPELINE_BUCKET
-            Value: !Ref PipelineArtifactsBucket
-          - Name: PIPELINE_STAGE
-            Value: !Ref PipelineStage
-          - Name: PIPELINE_STACK_NAME
-            Value: !Ref DeployStackName
-          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
-            Value: !Ref PackagedTemplatePath
-  # Integration Tests Pipeline Step
-  Integration:
-    Type: AWS::CodeBuild::Project
-    Condition: HasFeatureIntegration
-    Properties:
-      Name: !Sub ${PipelineName}--integration
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: !Ref IntegSpecPath
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:4.0'
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: PIPELINE_BUCKET
-            Value: !Ref PipelineArtifactsBucket
-          - Name: PIPELINE_STAGE
-            Value: !Ref PipelineStage
-          - Name: PIPELINE_STACK_NAME
-            Value: !Ref DeployStackName
-          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
-            Value: !Ref PackagedTemplatePath
-  # Cleanup Pipeline Step
-  Cleanup:
-    Type: AWS::CodeBuild::Project
-    Condition: HasFeatureCleanup
-    Properties:
-      Name: !Sub ${PipelineName}--cleanup
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: !Ref CleanupSpecPath
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        ComputeType: !Ref EnvironmentComputeType
-        Image: 'aws/codebuild/standard:4.0'
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: PIPELINE_BUCKET
-            Value: !Ref PipelineArtifactsBucket
-          - Name: PIPELINE_STAGE
-            Value: !Ref PipelineStage
-          - Name: PIPELINE_STACK_NAME
-            Value: !Ref DeployStackName
-          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
-            Value: !Ref PackagedTemplatePath
-  # Roles
+  # S3 bucket for hosting cd results
+  #ResultsBucket:
+  #  Type: AWS::S3::Bucket
+  #  Properties:
+  #    BucketName: !Sub ${ProjectName}--cd--results
+  #    AccessControl: PublicRead
+  #    WebsiteConfiguration:
+  #      IndexDocument: index.html
+  #      ErrorDocument: index.html
+  #ResultsBucketPolicy:
+  #  Type: AWS::S3::BucketPolicy
+  #  Properties:
+  #    Bucket: !Ref ResultsBucket
+  #    PolicyDocument:
+  #      Statement:
+  #        - Sid: PublicReadGetObject
+  #          Effect: Allow
+  #          Principal: '*'
+  #          Action:
+  #            - s3:GetObject
+  #          Resource: !Sub ${ResultsBucket.Arn}/*
+  # Roles used by all pipelines
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}--role
+      RoleName: !Sub ${ProjectName}--ci--pipeline-role
       Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -664,14 +364,14 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}/*
               - Effect: Allow
                 Action:
                   - "s3:ListBucket"
                   - "s3:GetBucketPolicy"
                 Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
-        # Access to build artifact bucket
+                  - !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}
+        # Allow invocation of permissions update
         - !If
           - HasPermissionsUpdate
           - PolicyName: invoke-permission-update-function
@@ -682,7 +382,7 @@ Resources:
                   Action:
                     - lambda:InvokeFunction
                   Resource:
-                    - !GetAtt PermissionsUpdate.Arn
+                    - !GetAtt PermissionsUpdateFunction.Arn
           - !Ref AWS::NoValue
         # Access to code build/deployment
         - PolicyName: codebuild-access
@@ -694,16 +394,17 @@ Resources:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                 Resource:
-                  - !GetAtt Build.Arn
-                  - !GetAtt Deploy.Arn
-                  - !If
-                    - HasFeatureIntegration
-                    - !GetAtt Integration.Arn
-                    - !Ref AWS::NoValue
-                  - !If
-                    - HasFeatureCleanup
-                    - !GetAtt Cleanup.Arn
-                    - !Ref AWS::NoValue
+                  - '*' #TODO
+                  #- !GetAtt Build.Arn
+                  #- !GetAtt Deploy.Arn
+                  #- !If
+                  #  - HasFeatureIntegration
+                  #  - !GetAtt Integration.Arn
+                  #  - !Ref AWS::NoValue
+                  #- !If
+                  #  - HasFeatureCleanup
+                  #  - !GetAtt Cleanup.Arn
+                  #  - !Ref AWS::NoValue
         # Allow cloudformation to deploy changes to the deployment stack
         - PolicyName: deploy-cloudformation-access
           PolicyDocument:
@@ -717,7 +418,8 @@ Resources:
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DescribeChangeSet
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/* #TODO
+                  #- !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
         # Give pipelines same permissions as deploy
         - PolicyName: deploy-iam-access
           PolicyDocument:
@@ -728,113 +430,10 @@ Resources:
                   - iam:PassRole
                 Resource:
                   - !GetAtt DeployRole.Arn
-  CodeBuildRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${PipelineName}--codebuild-role
-      Description: !Sub "Used in CodeBuild project. Created by CloudFormation ${AWS::StackId}"
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - codebuild.amazonaws.com
-        Version: '2012-10-17'
-      ManagedPolicyArns:
-        # TODO: tighten down on permissions
-        - arn:aws:iam::aws:policy/AWSCodeBuildReadOnlyAccess
-      Policies:
-        # Access to build artifact bucket
-        - PolicyName: s3-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:DeleteObject
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                  - s3:PutObject
-                Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}/*
-              - Effect: Allow
-                Action:
-                  - "s3:ListBucket"
-                  - "s3:GetBucketPolicy"
-                Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${PipelineArtifactsBucket}
-        # Access to logs and reports
-        - PolicyName: codebuild-access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Action: 
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Effect: Allow
-                Resource: 
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}--*
-              - Action:
-                  - codebuild:CreateReportGroup
-                  - codebuild:CreateReport
-                  - codebuild:UpdateReport
-                  - codebuild:BatchPutTestCases
-                Effect: Allow
-                Resource: 
-                  - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${PipelineName}*
-        # Allow codebuild to get stack details including output
-        - PolicyName: cloudformation-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cloudformation:DescribeStacks
-                Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
-        # Access to all deployed resources by their ResourceTag
-        - PolicyName: !If
-              - HasPermissionsUpdate
-              - DYNAMICALLY-UPDATED-deployed-resources-access
-              - deployed-resources-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              # Athena, RDS, and many others.
-              # Supports all marked as "Authorization based on tags" under https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-services-that-work-with-iam.html
-              - Effect: Allow
-                Action:
-                  - '*'
-                Resource:
-                  - '*'
-                Condition:
-                  StringEquals: 
-                    'aws:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
-              ## Unfortunately S3 does not have a conditional key for ResourceTag or anything similar.
-              ## So for now, full acess to all s3 buckets is provided.
-              ## TODO: need to find a way around this...
-              ## https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html
-              #- Effect: Allow
-              #  Action:
-              #    - s3:*
-              #  Resource:
-              #    - '*'
-              ## EC2
-              #- Effect: Allow
-              #  Action:
-              #    - 'ec2:*'
-              #  Resource:
-              #    - '*'
-              #  Condition:
-              #    StringEquals: 
-              #      'ec2:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${PipelineName}--deploy-role
+      RoleName: !Sub ${ProjectName}--ci--deploy-role
       Description: !Sub "Used by CodePipeline. Created by CloudFormation ${AWS::StackId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -954,3 +553,8 @@ Resources:
                   - appconfig:GetDeployment
                 Resource: "*"
                 Effect: Allow
+
+Outputs:
+  WebhookUrl:
+    Description: Please link this url to a github webhook. See https://github.com/MarcGuiselin/aws-transmutation#getting-started for details.
+    Value: !Sub https://${GithubWebhookApi}.execute-api.${AWS::Region}.amazonaws.com

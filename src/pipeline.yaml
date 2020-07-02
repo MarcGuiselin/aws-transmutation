@@ -1,0 +1,461 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Template for individual branch pipelines
+
+Parameters:
+  # Pipeline Configuration
+  PipelineName:
+    Type: String
+    Default: ''
+  DeployStackName:
+    Type: String
+    Default: ''
+  PipelineStage:
+    Type: String
+    Default: ''
+  PipelineFeatures:
+    Type: String
+    Default: Build > Deploy
+    AllowedValues:
+      - Build > Deploy
+      - Build > Deploy > Integration
+      - Build > Deploy > Integration > Cleanup
+  EnvironmentComputeType:
+    Type: String
+    Default: ''
+  EnvironmentImage:
+    Type: String
+    Default: ''
+  EnvironmentType:
+    Type: String
+    Default: ''
+  # Source (GitHub)
+  GithubToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+  GithubOwner:
+    Type: String
+    Default: ''
+  GithubRepo:
+    Type: String
+    Default: ''
+  GithubBranch:
+    Type: String
+    Default: ''
+  # Files
+  PackagedTemplatePath:
+    Type: String
+    Default: ''
+  TemplateConfigurationPath:
+    Type: String
+    Default: ''
+  BuildSpecPath:
+    Type: String
+    Default: ''
+  DeploySpecPath:
+    Type: String
+    Default: ''
+  IntegSpecPath:
+    Type: String
+    Default: ''
+  CleanupSpecPath:
+    Type: String
+    Default: ''
+  # Resources
+  ArtifactsBucket:
+    Type: String
+    Default: ''
+  InvokePermissionsUpdate:
+    Type: String
+    Default: ''
+  DeployRoleArn:
+    Type: String
+    Default: ''
+  PipelineRoleArn:
+    Type: String
+    Default: ''
+
+Rules:
+  ValidateParameters:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref GithubToken, '']]
+        AssertDescription: GithubToken must be specified
+      - Assert: !Not [!Equals [!Ref GithubOwner, '']]
+        AssertDescription: GithubOwner must be specified
+      - Assert: !Not [!Equals [!Ref GithubRepo, '']]
+        AssertDescription: GithubRepo must be specified
+      - Assert: !Not [!Equals [!Ref GithubBranch, '']]
+        AssertDescription: GithubBranch must be specified
+      - Assert: !Not [!Equals [!Ref ArtifactsBucket, '']]
+        AssertDescription: ArtifactsBucket must be specified
+
+Conditions:
+  HasFeatureIntegration: !Or
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration']
+    - !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
+  HasFeatureCleanup: 
+    !Equals [!Ref PipelineFeatures, 'Build > Deploy > Integration > Cleanup']
+  HasTemplateConfigurationPath: !Not [ !Equals [!Ref TemplateConfigurationPath, ''] ]
+  HasPermissionsUpdate:
+    !Not [ !Equals [!Ref InvokePermissionsUpdate, ''] ]
+
+Resources:
+  # Hook to github repository
+  GitHubWebhook:
+    Type: AWS::CodePipeline::Webhook
+    Properties:
+      Name: !Sub ${PipelineName}--github-hook
+      AuthenticationConfiguration:
+        SecretToken: !Ref GithubToken
+      Filters:
+        - JsonPath: "$.ref"
+          MatchEquals: refs/heads/{Branch}
+      Authentication: GITHUB_HMAC
+      TargetPipeline: !Ref Pipeline
+      TargetAction: GitHubSource
+      TargetPipelineVersion: !GetAtt Pipeline.Version
+      RegisterWithThirdParty: true
+  # Pipeline that builds and deploys branch
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${PipelineName}
+      ArtifactStore:
+        Location: !Ref ArtifactsBucket
+        Type: S3
+      RoleArn: !Ref PipelineRoleArn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: "1"
+              Configuration:
+                Owner: !Ref GithubOwner
+                OAuthToken: !Ref GithubToken
+                Repo: !Ref GithubRepo
+                Branch: master
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceArtifact
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref Build
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+        - Name: Deploy
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              InputArtifacts:
+                - Name: BuildArtifact
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                RoleArn: !Ref DeployRoleArn
+                StackName: !Ref DeployStackName
+                TemplateConfiguration: !If
+                  - HasTemplateConfigurationPath
+                  - !Sub BuildArtifact::${TemplateConfigurationPath}
+                  - !Ref AWS::NoValue
+                TemplatePath: !Sub BuildArtifact::${PackagedTemplatePath}
+                ChangeSetName: !Sub ${DeployStackName}--changeset
+              RunOrder: 1
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: !Ref DeployStackName
+                ChangeSetName: !Sub ${DeployStackName}--changeset
+              RunOrder: 2
+            - !If
+              - HasPermissionsUpdate
+              - Name: UpdatePermissions
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Provider: Lambda
+                  Version: '1'
+                Configuration:
+                  FunctionName: !Ref InvokePermissionsUpdate
+                RunOrder: 3
+              - !Ref AWS::NoValue
+            - Name: Deploy
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref Deploy
+              InputArtifacts:
+                - Name: SourceArtifact
+              RunOrder: !If
+                - HasPermissionsUpdate
+                - 4
+                - 3
+        - !If
+          - HasFeatureIntegration
+          - Name: Integration
+            Actions:
+              - Name: Integration
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref Integration
+                InputArtifacts:
+                  - Name: SourceArtifact
+          - !Ref AWS::NoValue
+        - !If
+          - HasFeatureIntegration
+          - Name: Cleanup
+            Actions:
+              - Name: Cleanup
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref Integration
+                InputArtifacts:
+                  - Name: SourceArtifact
+                RunOrder: 1
+              - Name: Delete Stack
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Provider: CloudFormation
+                  Version: '1'
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: !Ref DeployStackName
+                RunOrder: 2
+          - !Ref AWS::NoValue
+  # Build Pipeline Step
+  Build:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${PipelineName}--build
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref BuildSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: !Ref EnvironmentImage
+        Type: !Ref EnvironmentType
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref ArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
+  # Deploy Pipeline Step
+  Deploy:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${PipelineName}--deploy
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref DeploySpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref ArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
+  # Integration Tests Pipeline Step
+  Integration:
+    Type: AWS::CodeBuild::Project
+    Condition: HasFeatureIntegration
+    Properties:
+      Name: !Sub ${PipelineName}--integration
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref IntegSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref ArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
+  # Cleanup Pipeline Step
+  Cleanup:
+    Type: AWS::CodeBuild::Project
+    Condition: HasFeatureCleanup
+    Properties:
+      Name: !Sub ${PipelineName}--cleanup
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref CleanupSpecPath
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: !Ref EnvironmentComputeType
+        Image: 'aws/codebuild/standard:4.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: PIPELINE_BUCKET
+            Value: !Ref ArtifactsBucket
+          - Name: PIPELINE_STAGE
+            Value: !Ref PipelineStage
+          - Name: PIPELINE_STACK_NAME
+            Value: !Ref DeployStackName
+          - Name: PIPELINE_PACKAGED_TEMPLATE_PATH
+            Value: !Ref PackagedTemplatePath
+  # Roles
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${PipelineName}--codebuild-role
+      Description: !Sub "Used in CodeBuild project. Created by CloudFormation ${AWS::StackId}"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        # TODO: tighten down on permissions
+        - arn:aws:iam::aws:policy/AWSCodeBuildReadOnlyAccess
+      Policies:
+        # Access to build artifact bucket
+        - PolicyName: s3-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}/*
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}
+        # Access to logs and reports
+        - PolicyName: codebuild-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action: 
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PipelineName}--*
+              - Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                Effect: Allow
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${PipelineName}*
+        # Allow codebuild to get stack details including output
+        - PolicyName: cloudformation-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
+        # Access to all deployed resources by their ResourceTag
+        - PolicyName: !If
+              - HasPermissionsUpdate
+              - DYNAMICALLY-UPDATED-deployed-resources-access
+              - deployed-resources-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Athena, RDS, and many others.
+              # Supports all marked as "Authorization based on tags" under https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-services-that-work-with-iam.html
+              - Effect: Allow
+                Action:
+                  - '*'
+                Resource:
+                  - '*'
+                Condition:
+                  StringEquals: 
+                    'aws:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
+              ## Unfortunately S3 does not have a conditional key for ResourceTag or anything similar.
+              ## So for now, full acess to all s3 buckets is provided.
+              ## TODO: need to find a way around this...
+              ## https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html
+              #- Effect: Allow
+              #  Action:
+              #    - s3:*
+              #  Resource:
+              #    - '*'
+              ## EC2
+              #- Effect: Allow
+              #  Action:
+              #    - 'ec2:*'
+              #  Resource:
+              #    - '*'
+              #  Condition:
+              #    StringEquals: 
+              #      'ec2:ResourceTag/aws:cloudformation:stack-name': !Ref DeployStackName
