@@ -50,11 +50,10 @@ With a pipeline template it becomes possible for anyone to easily launch their o
 ## Getting Started
 
 1. Fork the example repo located at https://github.com/MarcGuiselin/aws-transmutation-starter
-1. Create GitHub OAuth Token
+    > Make sure to keep it public, otherwise bors-ng will ignore the project
+1. Create GitHub OAuth Token. Instructions [here](https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line).
     
-    > General instructions for creating a GitHub OAuth token can be found [here](https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line)
-    
-    > When you get to the scopes/permissions page, you should select the "repo" and "admin:repo_hook" scopes, which will automatically select all permissions under those two scopes
+    > When you get to the scopes/permissions page, you should select the "repo" and "admin:repo_hook" scopes
 
     <img src="images/github-token-permissions.png">
 
@@ -110,6 +109,10 @@ With a pipeline template it becomes possible for anyone to easily launch their o
         1. Acknowledge __Access Capabilities__
         1. Click __Create stack__ 
 
+1. The `master` (deployment) pipeline will build and deploy your project! Once the pipeline succeeds (can take up to 5 minutes), find the outputs from cloudformation and visit `HomepageUrl` to see your project:
+
+    <img src="images/example-site-before.png">
+
 1. Install Bors-NG (optional)
     - [Give Bors access to your repo](https://github.com/apps/bors/installations/new/permissions?target_id=24906387)
     - Click `Only select repositories`
@@ -117,10 +120,31 @@ With a pipeline template it becomes possible for anyone to easily launch their o
     - Click __Install__
     > You can also [Setup your own Bors-NG instance](https://github.com/bors-ng/bors-ng#how-to-set-up-your-own-real-instance)
 
-1. Clone your repo locally and create a `staging` branch
-1. Write some changes and commit
-1. Create a pull request on GitHub
-1. Confirm with Bors?
+1. Clone your forked repo locally with `git clone`
+1. Let's make some changes to `index.html`. Make the project yours!
+
+    <img src="images/example-commit-changes.gif">
+
+1. Create a `new-feature` branch, commit, and push to it
+    ```
+    git branch new-feature
+    git checkout new-feature
+    git add .\src\index.html
+    git commit
+    git push --set-upstream origin new-feature
+    ```
+1. Create a pull request on GitHub.
+    
+    1. Merge `new-feature` into `master`
+    1. Describe your new feature
+    1. __If you are using bors-ng, then do not click the green Merge button__. Comment `bors r+` and wait for bors to run integration tests and merge!
+    1. If you arn't using bors, then you can click the Merge button.
+
+    <img src="images/example-push-request.png">
+
+1. Now that the merge passed integration tests and our changes finally made it to `master` the deployment pipeline will automatically kick into gear! Once the pipeline succeeds (can take up to 5 minutes), reload your project's homepage and you will see your changes!
+
+    <img src="images/example-site-after.png">
 
 ## Develop With Git Branches
 
