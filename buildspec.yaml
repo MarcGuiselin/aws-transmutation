@@ -7,34 +7,27 @@ phases:
       nodejs: latest
       python: latest
     commands:
-      # Need cfn-lint for template lint check
+      # Need CloudFormation-lint for template check
       - pip install cfn-lint
-      # Install yarn for linking dependencies
-      - npm i -g yarn
       # Install dependencies for github-status-update
-      - cd src/github-status-update
-      - yarn install
-      - cd ../..
+      - cd src/github-status-update && npm i && cd ../..
       # Install dependencies for github-webhooks
-      - cd src/github-webhooks
-      - yarn install
-      - cd ../..
+      - cd src/github-webhooks && npm i && cd ../..
   build:
     commands:
       # Template lint check
-      - cfn-lint -t src/template.yaml
-      - cfn-lint -t src/pipeline.yaml
+      - cfn-lint src/template.yaml src/pipeline.yaml
       # Package templates
+      - mkdir dist
       - >
         sam package \
           --template-file src/template.yaml \
-          --output-template-file packaged-template.yaml \
+          --output-template-file dist/template.yaml \
           --s3-bucket $PIPELINE_BUCKET
       - >
         sam package \
           --template-file src/pipeline.yaml \
-          --output-template-file packaged-pipeline.yaml \
+          --output-template-file dist/pipeline.yaml \
           --s3-bucket $PIPELINE_BUCKET
       # Upload templates
-      - aws s3 cp packaged-template.yaml "s3://$PIPELINE_BUCKET/template.yaml" 
-      - aws s3 cp packaged-pipeline.yaml "s3://$PIPELINE_BUCKET/pipeline.yaml" 
+      - aws s3 cp dist s3://$PIPELINE_BUCKET --recursive

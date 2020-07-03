@@ -1,4 +1,8 @@
 {
   "name": "github-webhooks",
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "dependencies": {
+    "toml": "^3.0.0",
+    "axios": "^0.18.1"
+  }
 }
