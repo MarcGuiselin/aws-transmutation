@@ -22,28 +22,23 @@ exports.handler = async (event, context) => {
             .filter(a => a)
             .flat();
 
-        if(arns.length){
-            // Update role
-            console.log('Updating Role...');
-            await IAM.putRolePolicy({
-                PolicyDocument: JSON.stringify({
-                    Version: '2012-10-17',
-                    Statement: {
-                        Effect: 'Allow',
-                        Action: '*',
-                        Resource: arns
-                    }
-                }), 
-                PolicyName: POLICY_NAME, 
-                RoleName: ROLE_NAME
-            }).promise();
-        }
+        // Update role
+        console.log('Updating Role...');
+        await IAM.putRolePolicy({
+            PolicyDocument: JSON.stringify({
+                Version: '2012-10-17',
+                Statement: {
+                    Effect: 'Allow',
+                    Action: '*',
+                    Resource: arns.length ? 'none' : arns
+                }
+            }), 
+            PolicyName: POLICY_NAME, 
+            RoleName: ROLE_NAME
+        }).promise();
 
         // Notify AWS CodePipeline of a successful job
         await CodePipeline.putJobSuccessResult({jobId}).promise();
-        
-        // Success
-        context.succeed({});
     } catch(err) {
         // Notify AWS CodePipeline of a failed job
         await CodePipeline.putJobFailureResult({
@@ -54,8 +49,5 @@ exports.handler = async (event, context) => {
                 externalExecutionId: context.awsRequestId
             }
         }).promise();
-
-        // Failure
-        context.fail(err);
     }
 }
