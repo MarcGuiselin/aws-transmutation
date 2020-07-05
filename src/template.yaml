@@ -153,6 +153,7 @@ Resources:
             - !Ref PermissionsUpdateFunction
             - ''
           DEPLOY_ROLE_ARN: !GetAtt DeployRole.Arn
+          PIPELINE_ROLE_ARN: !GetAtt PipelineRole.Arn
       Policies:
         - Version: '2012-10-17'
           Statement:

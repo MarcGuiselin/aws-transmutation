@@ -21,7 +21,7 @@ Parameters:
       - Build > Deploy
       - Build > Deploy > Integration
       - Build > Deploy > Integration > Cleanup
-  EnvironmentComputeType:
+  EnvironmentCompute:
     Type: String
     Default: ''
   EnvironmentImage:
@@ -269,7 +269,7 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        ComputeType: !Ref EnvironmentComputeType
+        ComputeType: !Ref EnvironmentCompute
         Image: !Ref EnvironmentImage
         Type: !Ref EnvironmentType
         EnvironmentVariables:
@@ -293,7 +293,7 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        ComputeType: !Ref EnvironmentComputeType
+        ComputeType: !Ref EnvironmentCompute
         Image: 'aws/codebuild/standard:4.0'
         Type: LINUX_CONTAINER
         EnvironmentVariables:
@@ -318,7 +318,7 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        ComputeType: !Ref EnvironmentComputeType
+        ComputeType: !Ref EnvironmentCompute
         Image: 'aws/codebuild/standard:4.0'
         Type: LINUX_CONTAINER
         EnvironmentVariables:
@@ -343,7 +343,7 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        ComputeType: !Ref EnvironmentComputeType
+        ComputeType: !Ref EnvironmentCompute
         Image: 'aws/codebuild/standard:4.0'
         Type: LINUX_CONTAINER
         EnvironmentVariables:
