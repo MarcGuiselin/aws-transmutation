@@ -26,7 +26,7 @@ Metadata:
       - Label:
           default: Source (GitHub)
         Parameters:
-          - GithubToken
+          - GithubAuth
           - GithubSecret
           - GithubOwner
           - GithubRepo
@@ -37,8 +37,8 @@ Metadata:
       AutoPermissions:
         default: Automatic Permissions Update
       # Source (GitHub)
-      GithubToken:
-        default: OAuth Token
+      GithubAuth:
+        default: Auth Token
       GithubSecret:
         default: Webhook Secret
       GithubOwner:
@@ -68,13 +68,14 @@ Parameters:
       - Disabled
     Default: Enabled
   # Source (GitHub)
-  GithubToken:
+  GithubAuth:
     Type: String
     Default: ''
     AllowedPattern: '^[A-Za-z0-9]*$'
     Description: >
-      OAuth token used by AWS CodePipeline to connect to GitHub.
-      General instructions for creating a GitHub OAuth token can be found at:
+      Authorization token used by AWS CodePipeline to connect to GitHub.
+      It can be a personal access token, an OAuth token, an installation access token or a JSON Web Token for GitHub App authentication.
+      General instructions for creating a GitHub personal access token can be found at:
       https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
       When you get to the scopes/permissions page, you should select the "repo"
       and "admin:repo_hook" scopes, which will automatically select all
@@ -103,8 +104,8 @@ Parameters:
 Rules:
   ValidateParameters:
     Assertions:
-      - Assert: !Not [!Equals [!Ref GithubToken, '']]
-        AssertDescription: GithubToken must be specified
+      - Assert: !Not [!Equals [!Ref GithubAuth, '']]
+        AssertDescription: GithubAuth must be specified
       - Assert: !Not [!Equals [!Ref GithubSecret, '']]
         AssertDescription: GithubSecret must be specified
       - Assert: !Not [!Equals [!Ref GithubOwner, '']]
@@ -127,7 +128,8 @@ Resources:
   GithubWebhookApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      StageName: $default
+      CorsConfiguration:
+        AllowCredentials: true
   # Lambda function that receives project changes from github
   GithubWebhooksFunction:
     Type: AWS::Serverless::Function
@@ -140,7 +142,7 @@ Resources:
         Variables:
           PROJECT_NAME: !Ref ProjectName
           AUTO_PERMISSIONS: !Ref AutoPermissions
-          GITHUB_TOKEN: !Ref GithubToken
+          GITHUB_AUTH: !Ref GithubAuth
           GITHUB_SECRET: !Ref GithubSecret
           GITHUB_OWNER: !Ref GithubOwner
           GITHUB_REPO: !Ref GithubRepo
@@ -183,7 +185,7 @@ Resources:
           PROJECT_NAME: !Ref ProjectName
           GITHUB_OWNER: !Ref GithubOwner
           GITHUB_REPO: !Ref GithubRepo
-          GITHUB_OAUTH: !Ref GithubToken
+          GITHUB_OAUTH: !Ref GithubAuth
       Events:
         Event:
           Type: CloudWatchEvent

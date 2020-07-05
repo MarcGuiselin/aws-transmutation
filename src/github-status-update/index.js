@@ -2,13 +2,13 @@ const AWS = require('aws-sdk');
 const axios = require('axios');
 
 const CONTEXT = 'CodePipeline';
-const {GITHUB_OAUTH_TOKEN, GITHUB_OWNER, GITHUB_REPO} = process.env;
+const {GITHUB_AUTH, GITHUB_OWNER, GITHUB_REPO} = process.env;
 const GITHUB_API_HEADERS = {
     headers: {
         'Content-Type': 'application/json'
     },
     auth: {
-        password: GITHUB_OAUTH_TOKEN
+        password: GITHUB_AUTH
     }
 };
 
