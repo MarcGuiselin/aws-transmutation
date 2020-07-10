@@ -1,6 +1,7 @@
 module.exports = {
   enabled: false,
   branch: '*',
+  stack: 'default',
   stage: 'test',
   features: 'Build',
   description: 'No Description',

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8"/>
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css"/>
+  </head>
+  <body>
+    <header>
+      <ol class="breadcrumb">
+        <li>
+          <strong>Transmutation CI</strong>
+          <span class="glyphicon glyphicon-menu-right" aria-hidden="true" style="vertical-align: text-top;"></span>
+          <a href="{{baseUrl}}/{{owner}}">MarcGuiselin</a>
+        </li>
+        <li><a href="{{baseUrl}}/{{owner}}/{{repo}}">aws-transmutation-starter</a></li>
+        <li><a href="{{baseUrl}}/{{owner}}/{{repo}}/commits/{{branch}}">{{branch}}</a></li>
+        <li><a href="{{baseUrl}}/{{owner}}/{{repo}}/commit/{{sha}}">{{shaTrimmed}}</a> - Pipeline Results</li>
+      </ol>
+    </header>
+    <main role="main" class="container">
+      <!-- Title and status -->
+      <div class="page-header">
+        <h1>{{title}} <small>CI Status: Pending</small></h1>
+      </div>
+
+      <!-- Commit details and contributors -->
+      <div class="panel panel-default">
+        <div class="panel-body row row-no-gutters">
+          <div class="col-xs-12 col-md-9">
+            <h4>{{details}}</h4>
+          </div>
+          <div class="col-xs-6 col-md-3 text-right">
+            <div class="btn-group" role="group" aria-label="...">
+              <button type="button" class="btn btn-default" copy="{{sha}}">
+                <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
+              </button>
+              <a href="{{baseUrl}}/{{owner}}/{{repo}}/commit/{{sha}}" class="btn btn-default">
+                {{shaTrimmed}}
+              </a>
+              <a href="{{baseUrl}}/{{owner}}/{{repo}}/tree/{{sha}}" class="btn btn-default">
+                <span class="glyphicon glyphicon-menu-left" aria-hidden="true"></span>
+                <span class="glyphicon glyphicon-menu-right" aria-hidden="true" style="margin-left: -8px;"></span>
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <ul class="list-group">
+            {{#each contributors}}
+              <li class="list-group-item" style="margin-bottom: 0;">
+                <a href="{{page}}">
+                  <img height="20" width="20" alt="@{{author}}" src="{{avatar}}"/>
+                </a>
+                <a href="{{commits}}">
+                  <span> {{author}} </span>
+                </a>
+              </li>
+            {{/each}}
+          </ul>
+        </div>
+      </div>
+    
+      <!-- Stack Outputs -->
+      <div class="panel panel-default">
+        <div class="panel-heading">Outputs</div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Value</th>
+              <th>Description</th>
+            </tr>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each outputs}}
+            <tr>
+              <ul>
+                <td>{{key}}</td>
+                <td>
+                  <button type="button" class="btn btn-default" copy="{{value}}">
+                    <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
+                  </button>
+                  <span>{{value}}</span>
+                </td>
+                <td>{{desc}}</td>
+              </ul>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script src="//unpkg.com/timeago.js"></script>
+    <script>
+      // Self-updating timestamps
+      timeago().render(document.querySelectorAll('.timeago'));
+
+      // Copy text to clipboard.
+      // Credit to Dean Taylor: https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript#answer-30810322
+      function copyTextToClipboard(text) {
+        var textArea = document.createElement("textarea");
+
+        // Place in top-left corner of screen regardless of scroll position.
+        textArea.style.position = 'fixed';
+        textArea.style.top = 0;
+        textArea.style.left = 0;
+
+        // Ensure it has a small width and height. Setting to 1px / 1em
+        // doesn't work as this gives a negative w/h on some browsers.
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+
+        // We don't need padding, reducing the size if it does flash render.
+        textArea.style.padding = 0;
+
+        // Clean up any borders.
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+
+        // Avoid flash of white box if rendered for any reason.
+        textArea.style.background = 'transparent';
+
+        textArea.value = text;
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+          var successful = document.execCommand('copy');
+          var msg = successful ? 'successful' : 'unsuccessful';
+          console.log('Copying text command was ' + msg);
+        } catch (err) {
+          console.log('Oops, unable to copy');
+        }
+
+        document.body.removeChild(textArea);
+      }
+
+      for(let $el of document.querySelectorAll('button[copy]')){
+        $el.addEventListener('click', evt => copyTextToClipboard($el.getAttribute("copy")));
+      }
+    </script>
+  </body>
+</html>

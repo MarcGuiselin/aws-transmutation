@@ -6,6 +6,9 @@
 
 const AsRegex = wildcard => `^(${wildcard.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&').replace(/\*/g, ".*")})$`;
 
-const Matcher = (wildcard, match) => new RegExp(AsRegex(wildcard)).test(match);
+const Matches = (wildcard, match) => new RegExp(AsRegex(wildcard)).test(match);
 
-module.exports = Matcher;
+module.exports = {
+    AsRegex,
+    Matches
+}
