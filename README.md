@@ -1,4 +1,4 @@
-# <img src="images/icon.png" align="center"> (WIP) AWS Transmutation CD Pipeline
+# <img src="images/icon.png" align="center"> (EOL) AWS Transmutation CD Pipeline
 
 ![Build Status](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoidjhhbk05VFZnK2RWRjdQNWdzWTZ1ZWkvMlYrVHpodi9ZNGV1SERweGphazZ5NU9MU2lxdGdmdUxlaGJJc1RrV0JvNGlWcnBQK0U2dmJFQUxocFl4NHhNPSIsIml2UGFyYW1ldGVyU3BlYyI6IlhKVjJaWXFhZFFyaXZHRTQiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)
 
